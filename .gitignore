@@ -1,0 +1,13 @@
+# Ignore everything by default; explicitly allow only portable Pi config.
+/*
+!/.gitignore
+!/README.md
+!/agent/
+
+/agent/*
+!/agent/settings.json
+!/agent/models.json
+!/agent/extensions/
+!/agent/extensions/**
+!/agent/skills/
+!/agent/skills/**
