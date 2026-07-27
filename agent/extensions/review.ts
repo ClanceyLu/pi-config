@@ -433,25 +433,25 @@ Flag issues that:
 4. Apply system-level thinking; flag changes that increase operational risk or on-call wakeups.
 5. Ensure that errors are always checked against codes or stable identifiers, never error messages.
 
-## Code size and complexity constraints
+## Complexity and maintainability constraints
 
 Apply these defaults to handwritten source code unless the project provides stricter or language-specific limits:
 
-1. Source files should not exceed 500 physical lines or 100 KiB.
-2. Functions and methods should not exceed 80 physical lines.
-3. Cyclomatic complexity should not exceed 10 per function or method.
-4. Control-flow nesting should not exceed 4 levels.
-5. Functions and methods should not take more than 5 parameters; prefer an options/config object when the arguments form one concept.
+1. Do not enforce fixed file-length or function-length limits. Line count alone is never a finding.
+2. Flag a large file or function only when the changed code creates a concrete, actionable maintainability, testability, correctness, or reviewability problem; explain that impact without treating size as the defect.
+3. Cyclomatic complexity should generally not exceed 10 per function or method.
+4. Control-flow nesting should generally not exceed 4 levels.
+5. Functions and methods should generally not take more than 5 parameters; prefer an options/config object when the arguments form one concept.
 6. Substantially duplicated blocks of 10 or more consecutive lines should be extracted when doing so creates a clear, stable abstraction.
 
 Enforcement rules:
 
-1. Measure limits with available repository tools; do not infer a violation from appearance alone. Report the measured value and threshold.
-2. Apply findings only when the reviewed change creates a violation, crosses a threshold, or materially worsens an existing violation. Do not flag untouched legacy code.
+1. Measure complexity-related limits with available repository tools; do not infer a violation from appearance alone. Report the measured value and threshold when relying on a numerical limit.
+2. Apply findings only when the reviewed change creates or materially worsens the problem. Do not flag untouched legacy code.
 3. Exclude generated code, vendored dependencies, lockfiles, snapshots, minified/bundled artifacts, and machine-produced migrations or fixtures.
-4. A numerical breach is not enough by itself when splitting would reduce cohesion, duplicate state, or harm readability. Explain the concrete maintainability, testability, or defect risk and propose a practical split point.
-5. Prefer one focused finding per underlying oversized unit; do not emit separate file-size, function-size, and complexity findings for the same root cause.
-6. Treat a justified constraint violation as P2 by default. Escalate only when there is a concrete correctness, security, performance, or operational impact; use P3 for small, low-risk cleanup.
+4. Do not request splitting solely to reduce line count. Prefer cohesive code over arbitrary fragmentation or wrappers without clear value.
+5. Prefer one focused finding per underlying complexity or maintainability problem.
+6. Treat a justified complexity constraint violation as P2 by default. Escalate only when there is a concrete correctness, security, performance, or operational impact; use P3 for small, low-risk cleanup.
 
 ## Fail-fast error handling (strict)
 
