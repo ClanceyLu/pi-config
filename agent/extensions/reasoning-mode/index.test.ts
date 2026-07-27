@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { harness, legacyStateEntry, previousStateEntry, stateEntry } from "./test-harness.ts";
+import { PLAN_READY_MARKER } from "./types.ts";
 
 test("default Reasoning Mode activates explore, enables inspection tools, and restores the exact snapshot", async (t) => {
 	const original = ["read", "bash", "edit", "write", "external"];
@@ -79,6 +80,76 @@ test("/plan and /reasoning plan activate the same skill without a Plan workflow"
 	const prompt = await h.beforeAgent();
 	assert.match(prompt.systemPrompt, /EXPLORE_SKILL_BODY/);
 	assert.doesNotMatch(prompt.systemPrompt, /PLAN_SKILL_BODY/);
+});
+
+test("/plan approve leaves Reasoning Mode, restores tools, and starts plan execution", async (t) => {
+	const original = ["read", "bash", "edit", "write", "external"];
+	const h = await harness(t, { activeTools: original });
+	await h.start();
+	await h.command("plan", "design memory");
+	assert.equal(h.latestState()?.activeSkill, "plan");
+	await h.assistantMessage(`# Plan: Memory\n\n## Implementation steps\n1. Implement it.\n\n${PLAN_READY_MARKER}`);
+	assert.equal(h.latestState()?.planReady, true);
+
+	await h.command("plan", "approve");
+	assert.equal(h.latestState()?.mode, "off");
+	assert.deepEqual(h.activeTools(), original);
+	assert.equal(h.store.statuses.get("reasoning-mode"), undefined);
+	assert.equal(await h.beforeAgent(), undefined);
+	assert.deepEqual(h.store.customMessages.map((message) => message.customType), [
+		"reasoning-mode-transition",
+		"plan-approved",
+	]);
+	assert.equal(h.store.customMessages[0]?.display, false);
+	assert.equal(h.store.customMessages[1]?.display, true);
+	assert.deepEqual(h.store.customMessages[1]?.options, { deliverAs: "followUp", triggerTurn: true });
+	assert.match(h.store.customMessages[1]?.content ?? "", /most recent complete implementation plan/);
+	assert.match(h.store.customMessages[1]?.content ?? "", /Execute it now using the restored tools/);
+});
+
+test("/plan approve keeps incomplete or revised plans in read-only Reasoning Mode", async (t) => {
+	const h = await harness(t);
+	await h.start();
+	await h.command("plan", "design memory");
+	await h.assistantMessage(`I still need a material answer.\n\n${PLAN_READY_MARKER}\n\nPlease choose an option.`);
+
+	await h.command("plan", "approve");
+	assert.equal(h.latestState()?.mode, "reasoning");
+	assert.equal(h.latestState()?.activeSkill, "plan");
+	assert.equal(h.latestState()?.planReady, undefined);
+	assert.equal(h.activeTools().includes("edit"), false);
+	assert.equal(h.activeTools().includes("write"), false);
+	assert.equal(h.store.customMessages.length, 0);
+	assert.match(h.store.notifications.at(-1)?.message ?? "", /plan is not complete yet/);
+
+	await h.assistantMessage(`# Plan: Memory\n\n## Implementation steps\n1. Implement it.\n\n${PLAN_READY_MARKER}`);
+	assert.equal(h.latestState()?.planReady, true);
+	assert.deepEqual(await h.input("Revise the storage choice"), { action: "continue" });
+	await h.beforeAgent();
+	assert.equal(h.latestState()?.planReady, undefined);
+
+	await h.command("plan", "approve");
+	assert.equal(h.latestState()?.mode, "reasoning");
+	assert.equal(h.activeTools().includes("edit"), false);
+	assert.equal(h.store.customMessages.length, 0);
+	assert.match(h.store.notifications.at(-1)?.message ?? "", /plan is not complete yet/);
+});
+
+test("/plan approve is rejected outside the active plan workflow", async (t) => {
+	const h = await harness(t);
+	await h.start();
+	const original = h.activeTools();
+	await h.command("plan", "approve");
+	assert.deepEqual(h.activeTools(), original);
+	assert.equal(h.latestState(), undefined);
+	assert.match(h.store.notifications.at(-1)?.message ?? "", /No active plan workflow/);
+
+	await h.command("reasoning", "on");
+	const reasoningState = h.latestState();
+	await h.command("plan", "approve");
+	assert.deepEqual(h.latestState(), reasoningState);
+	assert.equal(h.latestState()?.activeSkill, "explore");
+	assert.equal(h.store.customMessages.length, 0);
 });
 
 test("direct /skill:plan input enters Reasoning Mode and avoids duplicate native expansion", async (t) => {
@@ -198,6 +269,21 @@ test("v1 neutral Reasoning state migrates to explore and persists v2 state", asy
 	assert.equal(h.activeTools().includes("edit"), false);
 });
 
+test("a completed plan remains approvable after session restore", async (t) => {
+	const original = ["read", "bash", "edit", "write", "external"];
+	const h = await harness(t, {
+		activeTools: original,
+		branch: [stateEntry("reasoning", { activeSkill: "plan", planReady: true, tools: original })],
+	});
+	await h.start();
+	assert.equal(h.activeTools().includes("edit"), false);
+
+	await h.command("plan", "approve");
+	assert.equal(h.latestState()?.mode, "off");
+	assert.deepEqual(h.activeTools(), original);
+	assert.equal(h.store.customMessages.at(-1)?.customType, "plan-approved");
+});
+
 test("branch navigation restores Reasoning state and exact tools without appending", async (t) => {
 	const original = ["read", "bash", "edit", "write", "external"];
 	const active = stateEntry("reasoning", { activeSkill: "plan", tools: original });
@@ -256,6 +342,9 @@ test("mode-changing commands and reasoning skill invocations are rejected while 
 	assert.match(h.store.notifications.at(-1)?.message ?? "", /Wait for the current turn/);
 	await h.command("reasoning", "on");
 	assert.equal(h.latestState(), undefined);
+	await h.command("plan", "approve");
+	assert.equal(h.latestState(), undefined);
+	assert.match(h.store.notifications.at(-1)?.message ?? "", /Wait for the current turn/);
 	assert.deepEqual(await h.input("/skill:plan task"), { action: "handled" });
 	assert.equal(h.latestState(), undefined);
 });

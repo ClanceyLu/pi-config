@@ -6,6 +6,7 @@ export interface ReasoningModeState {
 	version: 2;
 	mode: ReasoningModePhase;
 	activeSkill?: string;
+	planReady?: boolean;
 	toolsBeforeReasoning?: string[];
 }
 
@@ -16,6 +17,7 @@ export interface ReasoningModeConfig {
 }
 
 export const DEFAULT_REASONING_SKILL = "explore";
+export const PLAN_READY_MARKER = "<!-- reasoning-mode:plan-ready -->";
 
 export const DEFAULT_CONFIG: ReasoningModeConfig = {
 	shellPolicy: "inspect",

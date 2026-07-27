@@ -19,6 +19,7 @@ function normalizedFields(value: unknown): Omit<ReasoningModeState, "version"> {
 	return {
 		mode,
 		activeSkill,
+		...(activeSkill === "plan" && record.planReady === true ? { planReady: true } : {}),
 		toolsBeforeReasoning: mode === "reasoning" ? uniqueStrings(record.toolsBeforeReasoning) : undefined,
 	};
 }
@@ -30,6 +31,7 @@ export function normalizeState(value: unknown): ReasoningModeState {
 /** Migrates v1 Reasoning Mode, where an absent skill represented the neutral/default workflow. */
 export function migratePreviousState(value: unknown): ReasoningModeState {
 	const state = normalizeState(value);
+	delete state.planReady;
 	if (state.mode === "reasoning" && !state.activeSkill) state.activeSkill = DEFAULT_REASONING_SKILL;
 	return state;
 }

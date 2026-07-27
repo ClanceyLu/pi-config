@@ -50,7 +50,12 @@ interface HarnessStore {
 	commands: Map<string, RegisteredCommand>;
 	handlers: Map<string, Handler>;
 	userMessages: string[];
-	customMessages: Array<{ customType: string; content: string; display?: boolean }>;
+	customMessages: Array<{
+		customType: string;
+		content: string;
+		display?: boolean;
+		options?: { deliverAs?: string; triggerTurn?: boolean };
+	}>;
 	confirmQueue: boolean[];
 	skillPaths: Record<"explore" | "plan", string>;
 	skillEnabled: Record<"explore" | "plan", boolean>;
@@ -102,18 +107,30 @@ function createApi(store: HarnessStore) {
 			store.appended.push(entry);
 			store.branch.push(entry);
 		},
-		sendMessage: (message: { customType: string; content: string; display?: boolean }) => {
-			store.customMessages.push(structuredClone(message));
+		sendMessage: (
+			message: { customType: string; content: string; display?: boolean },
+			options?: { deliverAs?: string; triggerTurn?: boolean },
+		) => {
+			store.customMessages.push({ ...structuredClone(message), options: structuredClone(options) });
 		},
 		sendUserMessage: (message: string) => store.userMessages.push(message),
 	};
 }
 
-export function stateEntry(mode: "off" | "reasoning", options: { activeSkill?: string; tools?: string[] } = {}): BranchEntry {
+export function stateEntry(
+	mode: "off" | "reasoning",
+	options: { activeSkill?: string; planReady?: boolean; tools?: string[] } = {},
+): BranchEntry {
 	return {
 		type: "custom",
 		customType: "reasoning-mode-state-v2",
-		data: { version: 2, mode, activeSkill: options.activeSkill, toolsBeforeReasoning: options.tools },
+		data: {
+			version: 2,
+			mode,
+			activeSkill: options.activeSkill,
+			planReady: options.planReady,
+			toolsBeforeReasoning: options.tools,
+		},
 	};
 }
 
@@ -181,6 +198,9 @@ export async function harness(
 		start: async () => store.handlers.get("session_start")?.({}, ctx),
 		tree: async () => store.handlers.get("session_tree")?.({}, ctx),
 		input: async (text: string, source = "interactive") => store.handlers.get("input")?.({ text, source }, ctx),
+		assistantMessage: async (text: string) => store.handlers.get("message_end")?.({
+			message: { role: "assistant", content: [{ type: "text", text }] },
+		}, ctx),
 		beforeAgent: async () => store.handlers.get("before_agent_start")?.({
 			prompt: "task", systemPrompt: "BASE", systemPromptOptions: {
 				cwd: root,

@@ -38,7 +38,8 @@ Use this workflow for any project change: features, bug-fix planning, refactors,
 5. **Produce the final plan**
    - Do not finalize while material questions remain unresolved.
    - Make the plan actionable for an implementer who has not followed the full discussion.
-   - Do not implement, edit files, run state-changing commands, or treat approval as permission to leave Reasoning Mode.
+   - Do not implement, edit files, or run state-changing commands while producing or revising the plan.
+   - A normal-language approval does not leave Reasoning Mode. Only the extension's explicit `/plan approve` command may exit the mode and start execution.
 
 ## Final output
 
@@ -70,4 +71,12 @@ Each implementation step should identify:
 - how to verify it
 - important risks or compatibility concerns
 
-Return the plan directly as Markdown in the conversation. Revise it through normal follow-up discussion. There is no proposal, approval, export, or execution workflow in this skill.
+Return the plan directly as Markdown in the conversation and revise it through normal follow-up discussion.
+
+When and only when the response contains a complete final plan with no unresolved material questions, append this exact standalone final line after the plan:
+
+```text
+<!-- reasoning-mode:plan-ready -->
+```
+
+Do not emit the marker while asking clarifying questions, presenting incomplete options, or producing a partial draft. Every revised complete final plan must emit the marker again. The extension uses it to permit `/plan approve`; the marker does not itself leave Reasoning Mode. When the user is satisfied, they may run `/plan approve`; the extension—not this skill—will leave Reasoning Mode, restore the previous tools, and start executing the latest complete plan.

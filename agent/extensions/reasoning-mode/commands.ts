@@ -1,6 +1,8 @@
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_REASONING_SKILL, type ReasoningModeConfig, type ReasoningModeState } from "./types.ts";
 
+const PLAN_APPROVAL_MESSAGE = `The most recent complete implementation plan in this conversation is approved. Execute it now using the restored tools. Follow the plan's confirmed scope and decisions. If no complete plan is present, do not invent one; ask the user to finish the plan first.`;
+
 interface ReasoningCommandServices {
 	getState(): ReasoningModeState;
 	getConfig(): ReasoningModeConfig;
@@ -69,8 +71,30 @@ export function registerReasoningCommands(pi: ExtensionAPI, services: ReasoningC
 	});
 
 	pi.registerCommand("plan", {
-		description: "Shortcut for /reasoning plan [task]",
-		handler: (args, ctx) => startSkill(pi, ctx, services, "plan", args),
+		description: "Start plan reasoning, or approve and execute it with /plan approve",
+		getArgumentCompletions: (prefix) => "approve".startsWith(prefix) ? [{ value: "approve", label: "approve" }] : null,
+		handler: async (rawArgs, ctx) => {
+			const args = rawArgs.trim();
+			if (args !== "approve") return startSkill(pi, ctx, services, "plan", args);
+			if (!ctx.isIdle()) {
+				ctx.ui.notify("Wait for the current turn to settle before approving the plan.", "warning");
+				return;
+			}
+			const state = services.getState();
+			if (state.mode !== "reasoning" || state.activeSkill !== "plan") {
+				ctx.ui.notify("No active plan workflow is available to approve.", "error");
+				return;
+			}
+			if (state.planReady !== true) {
+				ctx.ui.notify("The active plan is not complete yet. Finish clarification and produce the final plan before approving it.", "error");
+				return;
+			}
+			services.leave(ctx);
+			pi.sendMessage(
+				{ customType: "plan-approved", content: PLAN_APPROVAL_MESSAGE, display: true },
+				{ deliverAs: "followUp", triggerTurn: true },
+			);
+		},
 	});
 
 	pi.registerShortcut("ctrl+alt+p", {

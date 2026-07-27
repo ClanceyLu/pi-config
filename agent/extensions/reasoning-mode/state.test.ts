@@ -16,6 +16,14 @@ test("v2 normalization accepts the compact Reasoning Mode state", () => {
 		activeSkill: undefined,
 		toolsBeforeReasoning: ["read"],
 	});
+	assert.deepEqual(normalizeState({ mode: "reasoning", activeSkill: "plan", planReady: true }), {
+		version: 2,
+		mode: "reasoning",
+		activeSkill: "plan",
+		planReady: true,
+		toolsBeforeReasoning: undefined,
+	});
+	assert.equal(normalizeState({ mode: "reasoning", activeSkill: "explore", planReady: true }).planReady, undefined);
 	assert.deepEqual(normalizeState({ mode: "off", activeSkill: "plan", toolsBeforeReasoning: ["read"] }), {
 		version: 2,
 		mode: "off",
@@ -31,7 +39,7 @@ test("v1 neutral Reasoning Mode migrates to the explore skill", () => {
 		activeSkill: "explore",
 		toolsBeforeReasoning: ["read"],
 	});
-	assert.deepEqual(migratePreviousState({ mode: "reasoning", activeSkill: "plan" }), {
+	assert.deepEqual(migratePreviousState({ mode: "reasoning", activeSkill: "plan", planReady: true }), {
 		version: 2,
 		mode: "reasoning",
 		activeSkill: "plan",

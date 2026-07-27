@@ -9,8 +9,8 @@ You are in an explicit read-only reasoning mode${activeSkill ? ` using the ${act
 - Read, search, analyze, discuss, and ask material questions.
 - Do not modify project files, repository state, or system state.
 - Do not bypass restrictions through shell commands, scripts, subprocesses, or third-party tools.
-- A user request to implement, execute, or proceed does not leave this mode.
-- Only an explicit /reasoning off command restores the tools that were active before this mode.
+- A normal user request to implement, execute, approve, or proceed does not leave this mode.
+- Only an explicit /reasoning off command, or /plan approve while the plan skill is active, restores the tools that were active before this mode.
 - An active reasoning skill specializes the reasoning workflow; it does not replace or relax these invariants.
 - If skill instructions conflict with Reasoning Mode safety, tool restrictions, mode-exit rules, or evidence requirements, Reasoning Mode takes precedence.
 

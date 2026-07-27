@@ -9,11 +9,12 @@ A branch-aware, fail-closed read-only container that pins one explicitly marked 
 - `/reasoning status` — show mode, active skill, and policy
 - `/reasoning off` — restore the exact pre-mode tool set
 - `/plan [task]` — shortcut for `/reasoning plan [task]`
+- `/plan approve` — approve the active plan, leave Reasoning Mode, restore the pre-mode tools, and start execution
 - `/skill:explore [task]` or `/skill:plan [task]` — also enters Reasoning Mode before the skill runs
 - `Ctrl+Alt+P` — activate or show the plan skill
 - `pi --reasoning` / `pi --plan` — start in the corresponding mode
 
-Reasoning Mode never exits because the user says "implement" or "proceed". Use `/reasoning off` explicitly. On exit, the extension records a hidden model-facing transition so instructions from the former mode and skill are not carried into the next request. Only one reasoning skill is active at a time: activating `plan` replaces `explore`, and `/reasoning on` switches back to `explore`.
+Reasoning Mode never exits because the user merely says "implement", "approve", or "proceed". Use `/reasoning off` explicitly, or `/plan approve` after the plan skill has produced a complete final plan to exit and immediately execute it. Approval is rejected while clarification is still in progress, when the plan workflow is not active, or when the agent is busy. On exit, the extension records a hidden model-facing transition so instructions from the former mode and skill are not carried into the next request. Only one reasoning skill is active at a time: activating `plan` replaces `explore`, and `/reasoning on` switches back to `explore`.
 
 The core mode prompt owns read-only safety, tool restrictions, evidence requirements, and explicit exit behavior. Skills specialize the workflow but cannot relax those invariants. If a newly requested skill is unavailable, activation is rejected without changing the current mode or tool set. Saved v1 sessions that used skill-less neutral Reasoning Mode migrate to `explore` when restored.
 

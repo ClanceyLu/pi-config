@@ -27,6 +27,7 @@ import {
 	DEFAULT_CONFIG,
 	DEFAULT_REASONING_SKILL,
 	INITIAL_STATE,
+	PLAN_READY_MARKER,
 	type ReasoningModeConfig,
 	type ReasoningModeState,
 } from "./types.ts";
@@ -35,6 +36,28 @@ const STATUS_KEY = "reasoning-mode";
 const EXIT_TRANSITION_MESSAGE = `<reasoning_mode_transition status="off">
 Reasoning Mode was explicitly disabled. Instructions from the former Reasoning Mode and its active skill no longer apply. Follow the base system prompt and the user's current request using the restored tool set; implementation is permitted when requested.
 </reasoning_mode_transition>`;
+
+function isCompletedPlanMessage(message: unknown): boolean {
+	if (!message || typeof message !== "object") return false;
+	const record = message as { role?: unknown; content?: unknown };
+	if (record.role !== "assistant") return false;
+	const text = typeof record.content === "string"
+		? record.content
+		: Array.isArray(record.content)
+			? record.content
+				.filter((part): part is { type: "text"; text: string } => Boolean(
+					part
+					&& typeof part === "object"
+					&& "type" in part
+					&& part.type === "text"
+					&& "text" in part
+					&& typeof part.text === "string",
+				))
+				.map((part) => part.text)
+				.join("\n")
+			: "";
+	return text.trimEnd().split(/\r?\n/).at(-1)?.trim() === PLAN_READY_MARKER;
+}
 
 export class ReasoningModeRuntime {
 	private state: ReasoningModeState = structuredClone(INITIAL_STATE);
@@ -59,6 +82,17 @@ export class ReasoningModeRuntime {
 
 	private persistState(): void {
 		this.pi.appendEntry(STATE_ENTRY_TYPE, structuredClone(this.state));
+	}
+
+	private setPlanReady(ready: boolean): void {
+		if (this.state.mode !== "reasoning" || this.state.activeSkill !== "plan") return;
+		const currentlyReady = this.state.planReady === true;
+		if (currentlyReady === ready) return;
+		const next = structuredClone(this.state);
+		if (ready) next.planReady = true;
+		else delete next.planReady;
+		this.state = next;
+		this.persistState();
 	}
 
 	private allToolNames(): string[] {
@@ -258,9 +292,15 @@ export class ReasoningModeRuntime {
 		});
 		this.pi.on("before_agent_start", async (event, ctx) => {
 			if (this.state.mode !== "reasoning") return;
+			if (this.state.activeSkill === "plan" && this.state.planReady === true) this.setPlanReady(false);
 			const skill = await this.skillPrompt(event.systemPromptOptions, ctx);
 			const additions = [reasoningModePrompt(this.state.activeSkill), skill.content, skill.failure].filter(Boolean).join("\n\n");
 			return { systemPrompt: `${event.systemPrompt}\n\n${additions}` };
+		});
+		this.pi.on("message_end", (event) => {
+			if (this.state.mode === "reasoning" && this.state.activeSkill === "plan" && isCompletedPlanMessage(event.message)) {
+				this.setPlanReady(true);
+			}
 		});
 		this.pi.on("tool_call", (event, ctx) => this.handleToolCall(event, ctx));
 		this.pi.on("session_start", async (_event, ctx) => {
