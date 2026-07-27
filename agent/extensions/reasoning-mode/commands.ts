@@ -1,13 +1,11 @@
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { ReasoningModeConfig, ReasoningModeState } from "./types.ts";
+import { DEFAULT_REASONING_SKILL, type ReasoningModeConfig, type ReasoningModeState } from "./types.ts";
 
 interface ReasoningCommandServices {
 	getState(): ReasoningModeState;
 	getConfig(): ReasoningModeConfig;
-	enter(ctx: ExtensionContext, activeSkill?: string): void;
 	leave(ctx: ExtensionContext): void;
 	activateSkill(ctx: ExtensionContext, name: string): Promise<boolean>;
-	updateUI(ctx: ExtensionContext): void;
 }
 
 function statusText(state: ReasoningModeState, config: ReasoningModeConfig): string {
@@ -32,7 +30,7 @@ async function startSkill(
 
 export function registerReasoningCommands(pi: ExtensionAPI, services: ReasoningCommandServices): void {
 	pi.registerCommand("reasoning", {
-		description: "Manage read-only Reasoning Mode: on, off, status, or <skill> [task]",
+		description: "Manage read-only Reasoning Mode: on (explore), off, status, or <skill> [task]",
 		handler: async (rawArgs, ctx) => {
 			const args = rawArgs.trim();
 			const [command = "", ...rest] = args.split(/\s+/);
@@ -42,7 +40,7 @@ export function registerReasoningCommands(pi: ExtensionAPI, services: ReasoningC
 						ctx.ui.notify("Wait for the current turn to settle before changing Reasoning Mode.", "warning");
 						return;
 					}
-					services.enter(ctx);
+					await services.activateSkill(ctx, DEFAULT_REASONING_SKILL);
 				} else ctx.ui.notify(statusText(services.getState(), services.getConfig()), "info");
 				return;
 			}
@@ -55,7 +53,7 @@ export function registerReasoningCommands(pi: ExtensionAPI, services: ReasoningC
 					ctx.ui.notify("Wait for the current turn to settle before changing Reasoning Mode.", "warning");
 					return;
 				}
-				services.enter(ctx);
+				await services.activateSkill(ctx, DEFAULT_REASONING_SKILL);
 				return;
 			}
 			if (command === "off") {

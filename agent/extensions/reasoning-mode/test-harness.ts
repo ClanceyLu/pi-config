@@ -50,9 +50,10 @@ interface HarnessStore {
 	commands: Map<string, RegisteredCommand>;
 	handlers: Map<string, Handler>;
 	userMessages: string[];
+	customMessages: Array<{ customType: string; content: string; display?: boolean }>;
 	confirmQueue: boolean[];
-	skillPath: string;
-	skillEnabled: boolean;
+	skillPaths: Record<"explore" | "plan", string>;
+	skillEnabled: Record<"explore" | "plan", boolean>;
 }
 
 function contextShape(): FakeContext {
@@ -82,22 +83,41 @@ function createApi(store: HarnessStore) {
 		getActiveTools: () => [...store.activeTools],
 		getAllTools: () => store.allTools.map((name) => ({ name })),
 		setActiveTools: (names: string[]) => { store.activeTools = [...names]; },
-		getCommands: () => store.skillEnabled ? [{
-			name: "skill:plan",
-			description: "Plan",
-			source: "skill",
-			sourceInfo: { path: store.skillPath, source: "test", scope: "temporary", origin: "top-level", baseDir: path.dirname(store.skillPath) },
-		}] : [],
+		getCommands: () => (["explore", "plan"] as const)
+			.filter((name) => store.skillEnabled[name])
+			.map((name) => ({
+				name: `skill:${name}`,
+				description: name === "plan" ? "Plan" : "Explore",
+				source: "skill",
+				sourceInfo: {
+					path: store.skillPaths[name],
+					source: "test",
+					scope: "temporary",
+					origin: "top-level",
+					baseDir: path.dirname(store.skillPaths[name]),
+				},
+			})),
 		appendEntry: (customType: string, data: unknown) => {
 			const entry = { type: "custom", customType, data: structuredClone(data) };
 			store.appended.push(entry);
 			store.branch.push(entry);
+		},
+		sendMessage: (message: { customType: string; content: string; display?: boolean }) => {
+			store.customMessages.push(structuredClone(message));
 		},
 		sendUserMessage: (message: string) => store.userMessages.push(message),
 	};
 }
 
 export function stateEntry(mode: "off" | "reasoning", options: { activeSkill?: string; tools?: string[] } = {}): BranchEntry {
+	return {
+		type: "custom",
+		customType: "reasoning-mode-state-v2",
+		data: { version: 2, mode, activeSkill: options.activeSkill, toolsBeforeReasoning: options.tools },
+	};
+}
+
+export function previousStateEntry(mode: "off" | "reasoning", options: { activeSkill?: string; tools?: string[] } = {}): BranchEntry {
 	return {
 		type: "custom",
 		customType: "reasoning-mode-state-v1",
@@ -119,21 +139,28 @@ export async function harness(
 		planFlag?: boolean;
 		reasoningFlag?: boolean;
 		skillEnabled?: boolean;
+		exploreSkillEnabled?: boolean;
 	} = {},
 ) {
 	const root = await fs.mkdtemp(path.join(tmpdir(), "reasoning-mode-test-"));
 	t.after(() => fs.rm(root, { recursive: true, force: true }));
-	const skillDir = path.join(root, "skills", "plan");
-	await fs.mkdir(skillDir, { recursive: true });
-	const skillPath = path.join(skillDir, "SKILL.md");
-	await fs.writeFile(skillPath, `---\nname: plan\ndescription: test\ndisable-model-invocation: true\nmetadata:\n  reasoning-mode: "true"\n---\n\n# Plan workflow\n\nPLAN_SKILL_BODY\n`);
+	const skillPaths = {
+		explore: path.join(root, "skills", "explore", "SKILL.md"),
+		plan: path.join(root, "skills", "plan", "SKILL.md"),
+	};
+	await Promise.all(Object.values(skillPaths).map((file) => fs.mkdir(path.dirname(file), { recursive: true })));
+	await Promise.all([
+		fs.writeFile(skillPaths.explore, `---\nname: explore\ndescription: test\ndisable-model-invocation: true\nmetadata:\n  reasoning-mode: "true"\n---\n\n# Explore workflow\n\nEXPLORE_SKILL_BODY\n`),
+		fs.writeFile(skillPaths.plan, `---\nname: plan\ndescription: test\ndisable-model-invocation: true\nmetadata:\n  reasoning-mode: "true"\n---\n\n# Plan workflow\n\nPLAN_SKILL_BODY\n`),
+	]);
 	const store: HarnessStore = {
 		activeTools: [...(options.activeTools ?? ["read", "bash", "edit", "write", "questionnaire", "external"])],
 		allTools: [...(options.allTools ?? ["read", "bash", "edit", "write", "grep", "find", "ls", "questionnaire", "external"])],
 		branch: structuredClone(options.branch ?? []), idle: true,
 		flags: { plan: options.planFlag ?? false, reasoning: options.reasoningFlag ?? false },
 		appended: [], notifications: [], statuses: new Map(), commands: new Map(), handlers: new Map(),
-		userMessages: [], confirmQueue: [], skillPath, skillEnabled: options.skillEnabled ?? true,
+		userMessages: [], customMessages: [], confirmQueue: [], skillPaths,
+		skillEnabled: { explore: options.exploreSkillEnabled ?? true, plan: options.skillEnabled ?? true },
 	};
 	const api = createApi(store);
 	reasoningModeExtension(api as never);
@@ -157,7 +184,16 @@ export async function harness(
 		beforeAgent: async () => store.handlers.get("before_agent_start")?.({
 			prompt: "task", systemPrompt: "BASE", systemPromptOptions: {
 				cwd: root,
-				skills: store.skillEnabled ? [{ name: "plan", description: "Plan", filePath: skillPath, baseDir: skillDir, sourceInfo: {}, disableModelInvocation: true }] : [],
+				skills: (["explore", "plan"] as const)
+					.filter((name) => store.skillEnabled[name])
+					.map((name) => ({
+						name,
+						description: name === "plan" ? "Plan" : "Explore",
+						filePath: store.skillPaths[name],
+						baseDir: path.dirname(store.skillPaths[name]),
+						sourceInfo: {},
+						disableModelInvocation: true,
+					})),
 			},
 		}, ctx),
 		toolCall: async (toolName: string, input: Record<string, unknown>) => store.handlers.get("tool_call")?.({ toolName, input }, ctx),
@@ -169,7 +205,7 @@ export async function harness(
 		setBranch: (entries: BranchEntry[]) => { store.branch = structuredClone(entries); },
 		setActiveTools: (tools: string[]) => { store.activeTools = [...tools]; },
 		setIdle: (idle: boolean) => { store.idle = idle; },
-		setSkillEnabled: (enabled: boolean) => { store.skillEnabled = enabled; },
-		removeSkillFile: async () => fs.rm(skillPath, { force: true }),
+		setSkillEnabled: (enabled: boolean, name: "explore" | "plan" = "plan") => { store.skillEnabled[name] = enabled; },
+		removeSkillFile: async (name: "explore" | "plan" = "plan") => fs.rm(store.skillPaths[name], { force: true }),
 	};
 }

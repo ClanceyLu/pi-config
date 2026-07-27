@@ -1,20 +1,63 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { harness, legacyStateEntry, stateEntry } from "./test-harness.ts";
+import { harness, legacyStateEntry, previousStateEntry, stateEntry } from "./test-harness.ts";
 
-test("neutral Reasoning Mode enables inspection tools and restores the exact snapshot", async (t) => {
+test("default Reasoning Mode activates explore, enables inspection tools, and restores the exact snapshot", async (t) => {
 	const original = ["read", "bash", "edit", "write", "external"];
 	const h = await harness(t, { activeTools: original });
 	await h.start();
 	await h.command("reasoning", "on");
 	assert.deepEqual(h.activeTools(), ["read", "bash", "grep", "find", "ls", "questionnaire"]);
 	assert.equal(h.latestState()?.mode, "reasoning");
-	assert.equal(h.store.statuses.get("reasoning-mode"), "REASON");
+	assert.equal(h.latestState()?.activeSkill, "explore");
+	assert.equal(h.store.statuses.get("reasoning-mode"), "REASON · explore");
+	const prompt = await h.beforeAgent();
+	assert.match(prompt.systemPrompt, /EXPLORE_SKILL_BODY/);
+	assert.doesNotMatch(prompt.systemPrompt, /PLAN_SKILL_BODY/);
 
 	await h.command("reasoning", "off");
 	assert.deepEqual(h.activeTools(), original);
 	assert.equal(h.latestState()?.mode, "off");
 	assert.equal(h.store.statuses.get("reasoning-mode"), undefined);
+});
+
+test("leaving Reasoning Mode removes the prompt and records an explicit model-facing transition", async (t) => {
+	const h = await harness(t);
+	await h.start();
+	await h.command("plan", "design memory");
+	assert.match((await h.beforeAgent()).systemPrompt, /<reasoning_mode>/);
+
+	await h.command("reasoning", "off");
+	assert.equal(await h.beforeAgent(), undefined);
+	assert.equal(h.store.customMessages.length, 1);
+	assert.equal(h.store.customMessages[0]?.customType, "reasoning-mode-transition");
+	assert.equal(h.store.customMessages[0]?.display, false);
+	assert.match(h.store.customMessages[0]?.content ?? "", /Reasoning Mode was explicitly disabled/);
+	assert.match(h.store.customMessages[0]?.content ?? "", /former Reasoning Mode and its active skill no longer apply/);
+
+	await h.command("reasoning", "off");
+	assert.equal(h.store.customMessages.length, 1);
+});
+
+test("bare /reasoning activates explore and missing explore leaves the current state unchanged", async (t) => {
+	const available = await harness(t);
+	await available.start();
+	await available.command("reasoning");
+	assert.equal(available.latestState()?.activeSkill, "explore");
+
+	const missing = await harness(t, { exploreSkillEnabled: false });
+	await missing.start();
+	const before = missing.activeTools();
+	await missing.command("reasoning", "on");
+	assert.deepEqual(missing.activeTools(), before);
+	assert.equal(missing.latestState(), undefined);
+	assert.match(missing.store.notifications.at(-1)?.message ?? "", /Skill "explore" is unavailable/);
+
+	const missingFlag = await harness(t, { reasoningFlag: true, exploreSkillEnabled: false });
+	await missingFlag.start();
+	assert.equal(missingFlag.latestState(), undefined);
+	assert.equal(missingFlag.store.statuses.get("reasoning-mode"), undefined);
+	assert.match(missingFlag.store.notifications.at(-1)?.message ?? "", /Skill "explore" is unavailable/);
 });
 
 test("/plan and /reasoning plan activate the same skill without a Plan workflow", async (t) => {
@@ -30,6 +73,12 @@ test("/plan and /reasoning plan activate the same skill without a Plan workflow"
 	await h.command("reasoning", "plan redesign cache");
 	assert.deepEqual(h.store.userMessages, ["design memory", "redesign cache"]);
 	assert.equal(h.latestState()?.activeSkill, "plan");
+
+	await h.command("reasoning", "on");
+	assert.equal(h.latestState()?.activeSkill, "explore");
+	const prompt = await h.beforeAgent();
+	assert.match(prompt.systemPrompt, /EXPLORE_SKILL_BODY/);
+	assert.doesNotMatch(prompt.systemPrompt, /PLAN_SKILL_BODY/);
 });
 
 test("direct /skill:plan input enters Reasoning Mode and avoids duplicate native expansion", async (t) => {
@@ -139,6 +188,16 @@ test("runtime gate remains authoritative when tools are re-enabled externally", 
 	});
 });
 
+test("v1 neutral Reasoning state migrates to explore and persists v2 state", async (t) => {
+	const original = ["read", "bash", "edit", "write"];
+	const h = await harness(t, { activeTools: original, branch: [previousStateEntry("reasoning", { tools: original })] });
+	await h.start();
+	assert.equal(h.latestState()?.version, 2);
+	assert.equal(h.latestState()?.activeSkill, "explore");
+	assert.equal(h.store.statuses.get("reasoning-mode"), "REASON · explore");
+	assert.equal(h.activeTools().includes("edit"), false);
+});
+
 test("branch navigation restores Reasoning state and exact tools without appending", async (t) => {
 	const original = ["read", "bash", "edit", "write", "external"];
 	const active = stateEntry("reasoning", { activeSkill: "plan", tools: original });
@@ -172,7 +231,15 @@ test("--reasoning and --plan initialize the intended state", async (t) => {
 	const reasoning = await harness(t, { reasoningFlag: true });
 	await reasoning.start();
 	assert.equal(reasoning.latestState()?.mode, "reasoning");
-	assert.equal(reasoning.latestState()?.activeSkill, undefined);
+	assert.equal(reasoning.latestState()?.activeSkill, "explore");
+
+	const restoredPlan = await harness(t, {
+		reasoningFlag: true,
+		branch: [stateEntry("reasoning", { activeSkill: "plan", tools: ["read", "edit", "write"] })],
+	});
+	await restoredPlan.start();
+	assert.equal(restoredPlan.latestState()?.activeSkill, "explore");
+	assert.equal(restoredPlan.store.statuses.get("reasoning-mode"), "REASON · explore");
 
 	const plan = await harness(t, { planFlag: true });
 	await plan.start();

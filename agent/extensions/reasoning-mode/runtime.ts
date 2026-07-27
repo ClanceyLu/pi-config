@@ -15,10 +15,26 @@ import {
 	resolveReasoningSkill,
 	resolveReasoningSkillFromCommands,
 } from "./skill-activation.ts";
-import { LEGACY_STATE_ENTRY_TYPE, migrateLegacyState, normalizeState, STATE_ENTRY_TYPE } from "./state.ts";
-import { DEFAULT_CONFIG, INITIAL_STATE, type ReasoningModeConfig, type ReasoningModeState } from "./types.ts";
+import {
+	LEGACY_STATE_ENTRY_TYPE,
+	migrateLegacyState,
+	migratePreviousState,
+	normalizeState,
+	PREVIOUS_STATE_ENTRY_TYPE,
+	STATE_ENTRY_TYPE,
+} from "./state.ts";
+import {
+	DEFAULT_CONFIG,
+	DEFAULT_REASONING_SKILL,
+	INITIAL_STATE,
+	type ReasoningModeConfig,
+	type ReasoningModeState,
+} from "./types.ts";
 
 const STATUS_KEY = "reasoning-mode";
+const EXIT_TRANSITION_MESSAGE = `<reasoning_mode_transition status="off">
+Reasoning Mode was explicitly disabled. Instructions from the former Reasoning Mode and its active skill no longer apply. Follow the base system prompt and the user's current request using the restored tool set; implementation is permitted when requested.
+</reasoning_mode_transition>`;
 
 export class ReasoningModeRuntime {
 	private state: ReasoningModeState = structuredClone(INITIAL_STATE);
@@ -35,10 +51,8 @@ export class ReasoningModeRuntime {
 		registerReasoningCommands(this.pi, {
 			getState: () => this.state,
 			getConfig: () => this.config,
-			enter: (ctx, skill) => this.enter(ctx, skill),
 			leave: (ctx) => this.leave(ctx),
 			activateSkill: (ctx, name) => this.activateSkill(ctx, name),
-			updateUI: (ctx) => this.updateUI(ctx),
 		});
 		this.registerEvents();
 	}
@@ -60,7 +74,7 @@ export class ReasoningModeRuntime {
 		const snapshot = this.state.mode === "reasoning" && this.state.toolsBeforeReasoning
 			? this.state.toolsBeforeReasoning
 			: this.pi.getActiveTools();
-		this.state = { version: 1, mode: "reasoning", activeSkill, toolsBeforeReasoning: snapshot };
+		this.state = { version: 2, mode: "reasoning", activeSkill, toolsBeforeReasoning: snapshot };
 		this.applyReasoningTools(ctx);
 		this.persistState();
 		this.updateUI(ctx);
@@ -76,6 +90,11 @@ export class ReasoningModeRuntime {
 		this.state = structuredClone(INITIAL_STATE);
 		this.persistState();
 		this.updateUI(ctx);
+		this.pi.sendMessage({
+			customType: "reasoning-mode-transition",
+			content: EXIT_TRANSITION_MESSAGE,
+			display: false,
+		});
 		ctx.ui.notify("Reasoning Mode disabled; previous tools restored.", "info");
 	}
 
@@ -118,16 +137,20 @@ export class ReasoningModeRuntime {
 		ctx.ui.setStatus(STATUS_KEY, ctx.mode === "tui" ? ctx.ui.theme.fg("warning", text) : text);
 	}
 
-	private restoreBranchState(ctx: ExtensionContext, honorFlags: boolean): void {
+	private async restoreBranchState(ctx: ExtensionContext, honorFlags: boolean): Promise<void> {
 		const baseline = this.state.toolsBeforeReasoning ?? this.pi.getActiveTools();
 		const branch = ctx.sessionManager.getBranch();
 		const saved = [...branch].reverse().find(
-			(entry) => entry.type === "custom" && entry.customType === STATE_ENTRY_TYPE,
-		) as { data?: unknown } | undefined;
+			(entry) => entry.type === "custom"
+				&& (entry.customType === STATE_ENTRY_TYPE || entry.customType === PREVIOUS_STATE_ENTRY_TYPE),
+		) as { customType?: string; data?: unknown } | undefined;
+		const previous = saved?.customType === PREVIOUS_STATE_ENTRY_TYPE;
 		const legacy = saved ? undefined : [...branch].reverse().find(
 			(entry) => entry.type === "custom" && entry.customType === LEGACY_STATE_ENTRY_TYPE,
 		) as { data?: unknown } | undefined;
-		this.state = saved ? normalizeState(saved.data) : migrateLegacyState(legacy?.data);
+		this.state = saved
+			? previous ? migratePreviousState(saved.data) : normalizeState(saved.data)
+			: migrateLegacyState(legacy?.data);
 		if (legacy && honorFlags) {
 			const phase = legacy.data && typeof legacy.data === "object" ? (legacy.data as { phase?: unknown }).phase : undefined;
 			ctx.ui.notify(
@@ -137,16 +160,13 @@ export class ReasoningModeRuntime {
 				"warning",
 			);
 		}
-		let shouldPersist = Boolean(legacy && honorFlags);
+		let shouldPersist = Boolean(honorFlags && (legacy || previous));
 		if (this.state.mode === "reasoning" && !this.state.toolsBeforeReasoning) {
 			this.state = { ...this.state, toolsBeforeReasoning: baseline };
 			shouldPersist = shouldPersist || honorFlags;
 		}
 		if (honorFlags && this.pi.getFlag("plan") === true) {
-			this.state = { version: 1, mode: "reasoning", activeSkill: "plan", toolsBeforeReasoning: this.state.toolsBeforeReasoning ?? baseline };
-			shouldPersist = true;
-		} else if (honorFlags && this.pi.getFlag("reasoning") === true && this.state.mode === "off") {
-			this.state = { version: 1, mode: "reasoning", toolsBeforeReasoning: baseline };
+			this.state = { version: 2, mode: "reasoning", activeSkill: "plan", toolsBeforeReasoning: this.state.toolsBeforeReasoning ?? baseline };
 			shouldPersist = true;
 		}
 		if (this.state.mode === "reasoning") this.applyReasoningTools(ctx);
@@ -156,6 +176,12 @@ export class ReasoningModeRuntime {
 		}
 		if (shouldPersist) this.persistState();
 		this.updateUI(ctx);
+
+		if (honorFlags
+			&& this.pi.getFlag("plan") !== true
+			&& this.pi.getFlag("reasoning") === true) {
+			await this.activateSkill(ctx, DEFAULT_REASONING_SKILL);
+		}
 	}
 
 	private invalidateActiveSkill(ctx: ExtensionContext, reason: string): string {
@@ -241,11 +267,11 @@ export class ReasoningModeRuntime {
 			const loaded = await loadConfig(ctx);
 			this.config = loaded.config;
 			for (const warning of loaded.warnings) ctx.ui.notify(warning, "warning");
-			this.restoreBranchState(ctx, true);
+			await this.restoreBranchState(ctx, true);
 			await this.validateActiveSkillAvailability(ctx);
 		});
 		this.pi.on("session_tree", async (_event, ctx) => {
-			this.restoreBranchState(ctx, false);
+			await this.restoreBranchState(ctx, false);
 			await this.validateActiveSkillAvailability(ctx);
 		});
 	}

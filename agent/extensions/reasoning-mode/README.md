@@ -1,19 +1,21 @@
 # Pi Reasoning Mode
 
-A branch-aware, fail-closed read-only mode that can pin explicitly marked reasoning skills into the system prompt.
+A branch-aware, fail-closed read-only container that pins one explicitly marked reasoning skill into the system prompt. The default `explore` skill supports incremental discussion, while `plan` produces a decision-ready implementation plan.
 
 ## Commands
 
-- `/reasoning` or `/reasoning on` — enter neutral Reasoning Mode
+- `/reasoning` or `/reasoning on` — enter Reasoning Mode with the default `explore` skill
 - `/reasoning <skill> [task]` — activate a skill whose metadata contains `reasoning-mode: "true"`
 - `/reasoning status` — show mode, active skill, and policy
 - `/reasoning off` — restore the exact pre-mode tool set
 - `/plan [task]` — shortcut for `/reasoning plan [task]`
-- `/skill:plan [task]` — also enters Reasoning Mode before the skill runs
+- `/skill:explore [task]` or `/skill:plan [task]` — also enters Reasoning Mode before the skill runs
 - `Ctrl+Alt+P` — activate or show the plan skill
 - `pi --reasoning` / `pi --plan` — start in the corresponding mode
 
-Reasoning Mode never exits because the user says "implement" or "proceed". Use `/reasoning off` explicitly.
+Reasoning Mode never exits because the user says "implement" or "proceed". Use `/reasoning off` explicitly. On exit, the extension records a hidden model-facing transition so instructions from the former mode and skill are not carried into the next request. Only one reasoning skill is active at a time: activating `plan` replaces `explore`, and `/reasoning on` switches back to `explore`.
+
+The core mode prompt owns read-only safety, tool restrictions, evidence requirements, and explicit exit behavior. Skills specialize the workflow but cannot relax those invariants. If a newly requested skill is unavailable, activation is rejected without changing the current mode or tool set. Saved v1 sessions that used skill-less neutral Reasoning Mode migrate to `explore` when restored.
 
 ## Configuration
 

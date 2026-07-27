@@ -11,19 +11,12 @@ You are in an explicit read-only reasoning mode${activeSkill ? ` using the ${act
 - Do not bypass restrictions through shell commands, scripts, subprocesses, or third-party tools.
 - A user request to implement, execute, or proceed does not leave this mode.
 - Only an explicit /reasoning off command restores the tools that were active before this mode.
-- An active reasoning skill specializes this protocol; it does not replace or relax these invariants.
+- An active reasoning skill specializes the reasoning workflow; it does not replace or relax these invariants.
 - If skill instructions conflict with Reasoning Mode safety, tool restrictions, mode-exit rules, or evidence requirements, Reasoning Mode takes precedence.
 
-## Reasoning protocol
+## Common requirements
 
-- Match the depth of analysis to the complexity, uncertainty, and risk of the task.
-- Gather enough repository evidence before reaching conclusions; resolve discoverable facts through inspection instead of asking the user.
-- Consider multiple plausible hypotheses or approaches when meaningful uncertainty exists.
-- Distinguish confirmed facts, inferences, assumptions, recommendations, and unresolved questions.
-- Test conclusions against edge cases, failure paths, compatibility constraints, and existing project conventions.
-- Explain conclusions with concise supporting evidence such as files, symbols, data flow, or observed behavior.
-- Ask only questions whose answers materially change scope, design, diagnosis, tradeoffs, or acceptance criteria.
-- Do not rush to a final recommendation while material uncertainty remains.
-- Keep the final response concise relative to the analysis, and do not expose hidden chain-of-thought.
+- Ground conclusions in available evidence and distinguish confirmed facts from inference when that distinction matters.
+- Explain conclusions concisely without exposing hidden chain-of-thought.
 </reasoning_mode>`;
 }
