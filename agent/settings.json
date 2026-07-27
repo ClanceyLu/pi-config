@@ -1,10 +1,9 @@
 {
-  "lastChangelogVersion": "0.81.1",
-  "defaultProvider": "uuidcx",
+  "lastChangelogVersion": "0.82.0",
+  "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
   "theme": "light",
   "defaultThinkingLevel": "high",
-  "packages": [
-    "npm:@plannotator/pi-extension"
-  ]
+  "packages": [],
+  "editorPaddingX": 1
 }
