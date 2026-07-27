@@ -1,0 +1,252 @@
+import type {
+	BuildSystemPromptOptions,
+	ExtensionAPI,
+	ExtensionContext,
+	ToolCallEvent,
+	ToolCallEventResult,
+} from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+import { registerReasoningCommands } from "./commands.ts";
+import { loadConfig } from "./config.ts";
+import { classifyBashCommand, classifyTool, reasoningToolSet } from "./policy.ts";
+import { reasoningModePrompt } from "./prompt.ts";
+import {
+	formatReasoningSkill,
+	resolveReasoningSkill,
+	resolveReasoningSkillFromCommands,
+} from "./skill-activation.ts";
+import { LEGACY_STATE_ENTRY_TYPE, migrateLegacyState, normalizeState, STATE_ENTRY_TYPE } from "./state.ts";
+import { DEFAULT_CONFIG, INITIAL_STATE, type ReasoningModeConfig, type ReasoningModeState } from "./types.ts";
+
+const STATUS_KEY = "reasoning-mode";
+
+export class ReasoningModeRuntime {
+	private state: ReasoningModeState = structuredClone(INITIAL_STATE);
+	private config: ReasoningModeConfig = structuredClone(DEFAULT_CONFIG);
+	private readonly pi: ExtensionAPI;
+
+	constructor(pi: ExtensionAPI) {
+		this.pi = pi;
+	}
+
+	register(): void {
+		this.pi.registerFlag("reasoning", { description: "Start in read-only Reasoning Mode", type: "boolean", default: false });
+		this.pi.registerFlag("plan", { description: "Start Reasoning Mode with the plan skill", type: "boolean", default: false });
+		registerReasoningCommands(this.pi, {
+			getState: () => this.state,
+			getConfig: () => this.config,
+			enter: (ctx, skill) => this.enter(ctx, skill),
+			leave: (ctx) => this.leave(ctx),
+			activateSkill: (ctx, name) => this.activateSkill(ctx, name),
+			updateUI: (ctx) => this.updateUI(ctx),
+		});
+		this.registerEvents();
+	}
+
+	private persistState(): void {
+		this.pi.appendEntry(STATE_ENTRY_TYPE, structuredClone(this.state));
+	}
+
+	private allToolNames(): string[] {
+		return this.pi.getAllTools().map((tool) => tool.name);
+	}
+
+	private applyReasoningTools(ctx: ExtensionContext): void {
+		const snapshot = this.state.toolsBeforeReasoning ?? this.pi.getActiveTools();
+		this.pi.setActiveTools(reasoningToolSet(snapshot, this.allToolNames(), this.config, ctx.mode));
+	}
+
+	private enter(ctx: ExtensionContext, activeSkill?: string): void {
+		const snapshot = this.state.mode === "reasoning" && this.state.toolsBeforeReasoning
+			? this.state.toolsBeforeReasoning
+			: this.pi.getActiveTools();
+		this.state = { version: 1, mode: "reasoning", activeSkill, toolsBeforeReasoning: snapshot };
+		this.applyReasoningTools(ctx);
+		this.persistState();
+		this.updateUI(ctx);
+		ctx.ui.notify(activeSkill ? `Reasoning Mode enabled with skill: ${activeSkill}.` : "Reasoning Mode enabled.", "info");
+	}
+
+	private leave(ctx: ExtensionContext): void {
+		if (this.state.mode === "off") {
+			ctx.ui.notify("Reasoning Mode is already off.", "info");
+			return;
+		}
+		this.pi.setActiveTools(this.state.toolsBeforeReasoning ?? this.pi.getActiveTools());
+		this.state = structuredClone(INITIAL_STATE);
+		this.persistState();
+		this.updateUI(ctx);
+		ctx.ui.notify("Reasoning Mode disabled; previous tools restored.", "info");
+	}
+
+	private async activateSkill(ctx: ExtensionContext, name: string): Promise<boolean> {
+		try {
+			const skill = await resolveReasoningSkillFromCommands(this.pi, name);
+			if (!skill) {
+				ctx.ui.notify(`Skill \"${name}\" is unavailable or is not marked for Reasoning Mode.`, "error");
+				return false;
+			}
+			this.enter(ctx, name);
+			return true;
+		} catch (error) {
+			ctx.ui.notify(`Failed to load reasoning skill \"${name}\": ${error instanceof Error ? error.message : String(error)}`, "error");
+			return false;
+		}
+	}
+
+	private async validateActiveSkillAvailability(ctx: ExtensionContext): Promise<void> {
+		const name = this.state.activeSkill;
+		if (!name) return;
+		try {
+			const skill = await resolveReasoningSkillFromCommands(this.pi, name);
+			if (skill) return;
+			this.invalidateActiveSkill(ctx, `Active reasoning skill \"${name}\" is unavailable or is not marked for Reasoning Mode.`);
+		} catch (error) {
+			this.invalidateActiveSkill(
+				ctx,
+				`Failed to load active reasoning skill \"${name}\": ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
+
+	private updateUI(ctx: ExtensionContext): void {
+		if (this.state.mode === "off") {
+			ctx.ui.setStatus(STATUS_KEY, undefined);
+			return;
+		}
+		const text = this.state.activeSkill ? `REASON · ${this.state.activeSkill}` : "REASON";
+		ctx.ui.setStatus(STATUS_KEY, ctx.mode === "tui" ? ctx.ui.theme.fg("warning", text) : text);
+	}
+
+	private restoreBranchState(ctx: ExtensionContext, honorFlags: boolean): void {
+		const baseline = this.state.toolsBeforeReasoning ?? this.pi.getActiveTools();
+		const branch = ctx.sessionManager.getBranch();
+		const saved = [...branch].reverse().find(
+			(entry) => entry.type === "custom" && entry.customType === STATE_ENTRY_TYPE,
+		) as { data?: unknown } | undefined;
+		const legacy = saved ? undefined : [...branch].reverse().find(
+			(entry) => entry.type === "custom" && entry.customType === LEGACY_STATE_ENTRY_TYPE,
+		) as { data?: unknown } | undefined;
+		this.state = saved ? normalizeState(saved.data) : migrateLegacyState(legacy?.data);
+		if (legacy && honorFlags) {
+			const phase = legacy.data && typeof legacy.data === "object" ? (legacy.data as { phase?: unknown }).phase : undefined;
+			ctx.ui.notify(
+				phase === "planning" || phase === "awaiting_approval"
+					? "Legacy Plan Mode restored as read-only Reasoning Mode; approval and execution tracking were removed."
+					: "Legacy Plan execution was not resumed; Reasoning Mode is off.",
+				"warning",
+			);
+		}
+		let shouldPersist = Boolean(legacy && honorFlags);
+		if (this.state.mode === "reasoning" && !this.state.toolsBeforeReasoning) {
+			this.state = { ...this.state, toolsBeforeReasoning: baseline };
+			shouldPersist = shouldPersist || honorFlags;
+		}
+		if (honorFlags && this.pi.getFlag("plan") === true) {
+			this.state = { version: 1, mode: "reasoning", activeSkill: "plan", toolsBeforeReasoning: this.state.toolsBeforeReasoning ?? baseline };
+			shouldPersist = true;
+		} else if (honorFlags && this.pi.getFlag("reasoning") === true && this.state.mode === "off") {
+			this.state = { version: 1, mode: "reasoning", toolsBeforeReasoning: baseline };
+			shouldPersist = true;
+		}
+		if (this.state.mode === "reasoning") this.applyReasoningTools(ctx);
+		else {
+			this.pi.setActiveTools(baseline);
+			this.state = structuredClone(INITIAL_STATE);
+		}
+		if (shouldPersist) this.persistState();
+		this.updateUI(ctx);
+	}
+
+	private invalidateActiveSkill(ctx: ExtensionContext, reason: string): string {
+		const name = this.state.activeSkill;
+		if (!name) return reason;
+		this.state = { ...this.state, activeSkill: undefined };
+		this.persistState();
+		this.updateUI(ctx);
+		ctx.ui.notify(reason, "error");
+		return `<reasoning_skill_error>\nThe requested reasoning skill \"${name}\" could not be loaded. Do not continue or approximate that workflow. Explain that the skill is unavailable and ask the user to restore it or choose another explicit mode.\n</reasoning_skill_error>`;
+	}
+
+	private async skillPrompt(
+		options: BuildSystemPromptOptions,
+		ctx: ExtensionContext,
+	): Promise<{ content?: string; failure?: string }> {
+		const name = this.state.activeSkill;
+		if (!name) return {};
+		try {
+			const skill = await resolveReasoningSkill(options, name);
+			if (skill) return { content: formatReasoningSkill(skill) };
+			return { failure: this.invalidateActiveSkill(ctx, `Active reasoning skill \"${name}\" is no longer available.`) };
+		} catch (error) {
+			const message = `Failed to load active reasoning skill \"${name}\": ${error instanceof Error ? error.message : String(error)}`;
+			return { failure: this.invalidateActiveSkill(ctx, message) };
+		}
+	}
+
+	private async handleToolCall(event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> {
+		if (this.state.mode !== "reasoning") return;
+		if (event.toolName === "questionnaire" && ctx.mode !== "tui") {
+			return { block: true, reason: "Reasoning Mode: questionnaire is available only in TUI mode." };
+		}
+		if (isToolCallEventType("bash", event)) {
+			if (this.config.tools.bash === "deny" || this.config.shellPolicy === "strict") {
+				return { block: true, reason: "Reasoning Mode: bash is disabled by policy." };
+			}
+			const decision = classifyBashCommand(event.input.command);
+			if (decision.action === "allow" && this.config.tools.bash !== "ask") return;
+			if (decision.action === "deny") return { block: true, reason: `Reasoning Mode: ${decision.reason}.` };
+			const allowed = ctx.hasUI && await ctx.ui.confirm("Reasoning Mode shell command", `${decision.reason}:\n\n${event.input.command}`);
+			return allowed ? undefined : { block: true, reason: `Reasoning Mode: shell command not approved (${decision.reason}).` };
+		}
+		const decision = classifyTool(event.toolName, this.config);
+		if (decision.action === "allow") return;
+		if (decision.action === "deny") return { block: true, reason: `Reasoning Mode: ${decision.reason}.` };
+		const allowed = ctx.hasUI && await ctx.ui.confirm("Reasoning Mode tool permission", `Allow ${event.toolName} once?\n\n${decision.reason}`);
+		return allowed ? undefined : { block: true, reason: `Reasoning Mode: ${event.toolName} was not approved.` };
+	}
+
+	private registerEvents(): void {
+		this.pi.on("input", async (event, ctx) => {
+			const match = event.text.match(/^\/skill:([a-z0-9-]+)(?:\s+([\s\S]*))?$/);
+			if (!match) return { action: "continue" };
+			const name = match[1]!;
+			try {
+				const skill = await resolveReasoningSkillFromCommands(this.pi, name);
+				if (!skill) return { action: "continue" };
+				if (!ctx.isIdle()) {
+					ctx.ui.notify("Wait for the current turn to settle before changing Reasoning Mode.", "warning");
+					return { action: "handled" };
+				}
+				this.enter(ctx, name);
+				return {
+					action: "transform",
+					text: match[2]?.trim() || `Use the active ${name} skill. Ask what the user wants to analyze if the task is not yet clear.`,
+				};
+			} catch (error) {
+				const message = `Failed to load reasoning skill \"${name}\": ${error instanceof Error ? error.message : String(error)}`;
+				if (this.state.activeSkill === name) this.invalidateActiveSkill(ctx, message);
+				else ctx.ui.notify(message, "error");
+				return { action: "handled" };
+			}
+		});
+		this.pi.on("before_agent_start", async (event, ctx) => {
+			if (this.state.mode !== "reasoning") return;
+			const skill = await this.skillPrompt(event.systemPromptOptions, ctx);
+			const additions = [reasoningModePrompt(this.state.activeSkill), skill.content, skill.failure].filter(Boolean).join("\n\n");
+			return { systemPrompt: `${event.systemPrompt}\n\n${additions}` };
+		});
+		this.pi.on("tool_call", (event, ctx) => this.handleToolCall(event, ctx));
+		this.pi.on("session_start", async (_event, ctx) => {
+			const loaded = await loadConfig(ctx);
+			this.config = loaded.config;
+			for (const warning of loaded.warnings) ctx.ui.notify(warning, "warning");
+			this.restoreBranchState(ctx, true);
+			await this.validateActiveSkillAvailability(ctx);
+		});
+		this.pi.on("session_tree", async (_event, ctx) => {
+			this.restoreBranchState(ctx, false);
+			await this.validateActiveSkillAvailability(ctx);
+		});
+	}
+}
