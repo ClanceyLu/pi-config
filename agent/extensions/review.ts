@@ -156,12 +156,12 @@ function getFindingsSectionBounds(lines: string[]): { start: number; end: number
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
 		const heading = parseMarkdownHeading(line);
-		if (heading && /^findings\b/i.test(heading.title)) {
+		if (heading && /^(?:findings\b|问题(?:清单)?|审查发现)/i.test(heading.title)) {
 			start = i + 1;
 			findingsHeadingLevel = heading.level;
 			break;
 		}
-		if (/^\s*findings\s*:?\s*$/i.test(line)) {
+		if (/^\s*(?:findings|问题(?:清单)?|审查发现)\s*[:：]?\s*$/i.test(line)) {
 			start = i + 1;
 			break;
 		}
@@ -177,7 +177,7 @@ function getFindingsSectionBounds(lines: string[]): { start: number; end: number
 		const heading = parseMarkdownHeading(line);
 		if (heading) {
 			const normalizedTitle = heading.title.replace(/[*_`]/g, "").trim();
-			if (/^(review scope|verdict|overall verdict|fix queue|constraints(?:\s*&\s*preferences)?)\b:?/i.test(normalizedTitle)) {
+			if (/^(?:review scope\b|verdict\b|overall verdict\b|fix queue\b|constraints(?:\s*&\s*preferences)?\b|审查范围|结论|总体结论|修复队列|约束(?:与|和)偏好)[:：]?/i.test(normalizedTitle)) {
 				end = i;
 				break;
 			}
@@ -192,7 +192,7 @@ function getFindingsSectionBounds(lines: string[]): { start: number; end: number
 			}
 		}
 
-		if (/^\s*(review scope|verdict|overall verdict|fix queue|constraints(?:\s*&\s*preferences)?)\b:?/i.test(line)) {
+		if (/^\s*(?:review scope\b|verdict\b|overall verdict\b|fix queue\b|constraints(?:\s*&\s*preferences)?\b|审查范围|结论|总体结论|修复队列|约束(?:与|和)偏好)\s*[:：]?/i.test(line)) {
 			end = i;
 			break;
 		}
@@ -244,17 +244,19 @@ function normalizeVerdictValue(value: string): string {
 
 function isNeedsAttentionVerdictValue(value: string): boolean {
 	const normalized = normalizeVerdictValue(value);
-	if (!normalized.includes("needs attention")) {
+	const indicatesNeedsAttention =
+		normalized.includes("needs attention") || /(?:需要|需)(?:关注|处理)/.test(normalized);
+	if (!indicatesNeedsAttention) {
 		return false;
 	}
 
-	if (/\bnot\s+needs\s+attention\b/.test(normalized)) {
+	if (/\bnot\s+needs\s+attention\b/.test(normalized) || /(?:不需要|无需)(?:关注|处理)/.test(normalized)) {
 		return false;
 	}
 
 	// Reject rubric/choice phrasing like "correct or needs attention", but
 	// keep legitimate verdict text that may contain unrelated "or".
-	if (/\bcorrect\b/.test(normalized) && /\bor\b/.test(normalized)) {
+	if ((/\bcorrect\b/.test(normalized) && /\bor\b/.test(normalized)) || (normalized.includes("正确") && normalized.includes("或"))) {
 		return false;
 	}
 
@@ -265,7 +267,7 @@ function hasNeedsAttentionVerdict(messageText: string): boolean {
 	const lines = messageText.split(/\r?\n/);
 
 	for (const line of lines) {
-		const inlineMatch = line.match(/^\s*(?:[*-+]\s*)?(?:overall\s+)?verdict\s*:\s*(.+)$/i);
+		const inlineMatch = line.match(/^\s*(?:[*-+]\s*)?(?:(?:overall\s+)?verdict|(?:总体)?结论)\s*[:：]\s*(.+)$/i);
 		if (inlineMatch && isNeedsAttentionVerdictValue(inlineMatch[1])) {
 			return true;
 		}
@@ -278,11 +280,11 @@ function hasNeedsAttentionVerdict(messageText: string): boolean {
 		let verdictLevel: number | null = null;
 		if (heading) {
 			const normalizedHeading = heading.title.replace(/[*_`]/g, "").trim();
-			if (!/^(?:overall\s+)?verdict\b/i.test(normalizedHeading)) {
+			if (!/^(?:(?:overall\s+)?verdict\b|(?:总体)?结论)/i.test(normalizedHeading)) {
 				continue;
 			}
 			verdictLevel = heading.level;
-		} else if (!/^\s*(?:overall\s+)?verdict\s*:?\s*$/i.test(line)) {
+		} else if (!/^\s*(?:(?:overall\s+)?verdict|(?:总体)?结论)\s*[:：]?\s*$/i.test(line)) {
 			continue;
 		}
 
@@ -294,7 +296,7 @@ function hasNeedsAttentionVerdict(messageText: string): boolean {
 				if (verdictLevel === null || nextHeading.level <= verdictLevel) {
 					break;
 				}
-				if (/^(review scope|findings|fix queue|constraints(?:\s*&\s*preferences)?)\b:?/i.test(normalizedNextHeading)) {
+				if (/^(?:review scope\b|findings\b|fix queue\b|constraints(?:\s*&\s*preferences)?\b|审查范围|问题(?:清单)?|审查发现|修复队列|约束(?:与|和)偏好)[:：]?/i.test(normalizedNextHeading)) {
 					break;
 				}
 			}
@@ -308,7 +310,7 @@ function hasNeedsAttentionVerdict(messageText: string): boolean {
 				return true;
 			}
 
-			if (/\bcorrect\b/i.test(normalizeVerdictValue(trimmed))) {
+			if (/\bcorrect\b/i.test(normalizeVerdictValue(trimmed)) || normalizeVerdictValue(trimmed).includes("正确")) {
 				break;
 			}
 		}
@@ -467,18 +469,18 @@ When reviewing added or modified error handling, default to fail-fast behavior.
 
 ## Required human callouts (non-blocking, at the very end)
 
-After findings/verdict, you MUST append this final section:
+After findings/verdict, you MUST append this final section exactly in Simplified Chinese:
 
-## Human Reviewer Callouts (Non-Blocking)
+## 人工审查提醒（非阻塞）
 
 Include only applicable callouts (no yes/no lines):
 
-- **This change adds a database migration:** <files/details>
-- **This change introduces a new dependency:** <package(s)/details>
-- **This change changes a dependency (or the lockfile):** <files/package(s)/details>
-- **This change modifies auth/permission behavior:** <what changed and where>
-- **This change introduces backwards-incompatible public schema/API/contract changes:** <what changed and where>
-- **This change includes irreversible or destructive operations:** <operation and scope>
+- **此变更新增数据库迁移：** <文件/详情>
+- **此变更新增依赖：** <软件包/详情>
+- **此变更修改依赖（或锁文件）：** <文件/软件包/详情>
+- **此变更修改身份验证或权限行为：** <变更内容和位置>
+- **此变更引入不向后兼容的公共架构/API/契约变更：** <变更内容和位置>
+- **此变更包含不可逆或破坏性操作：** <操作和范围>
 
 Rules for this section:
 1. These are informational callouts for the human reviewer, not fix items.
@@ -486,7 +488,7 @@ Rules for this section:
 3. These callouts alone must not change the verdict.
 4. Only include callouts that apply to the reviewed change.
 5. Keep each emitted callout bold exactly as written.
-6. If none apply, write "- (none)".
+6. If none apply, write "- （无）".
 
 ## Priority levels
 
@@ -496,18 +498,20 @@ Tag each finding with a priority level in the title:
 - [P2] - Normal. To be fixed eventually.
 - [P3] - Low. Nice to have.
 
-## Output format
+## Output language and format
+
+All user-facing review output MUST be in Simplified Chinese. Keep priority tags, file paths, code, identifiers, and literal error messages unchanged when translation would make them inaccurate.
 
 Provide your findings in a clear, structured format:
-1. List each finding with its priority tag, file location, and explanation.
+1. Use \`## 问题\` for findings. List each finding with its priority tag, file location, and a Chinese explanation.
 2. Findings must reference locations that overlap with the actual diff — don't flag pre-existing code.
 3. Keep line references as short as possible (avoid ranges over 5-10 lines; pick the most suitable subrange).
-4. Provide an overall verdict: "correct" (no blocking issues) or "needs attention" (has blocking issues).
+4. Use \`## 结论\` for the overall verdict and write exactly \`正确\` (no blocking issues) or \`需要关注\` (has blocking issues).
 5. Ignore trivial style issues unless they obscure meaning or violate documented standards.
 6. Do not generate a full PR fix — only flag issues and optionally provide short suggestion blocks.
-7. End with the required "Human Reviewer Callouts (Non-Blocking)" section and all applicable bold callouts (no yes/no).
+7. End with the required \`## 人工审查提醒（非阻塞）\` section and all applicable bold callouts (no yes/no).
 
-Output all findings the author would fix if they knew about them. If there are no qualifying findings, explicitly state the code looks good. Don't stop at the first finding - list every qualifying issue. Then append the required non-blocking callouts section.`;
+Output all findings the author would fix if they knew about them. If there are no qualifying findings, explicitly state in Chinese that the code looks good. Don't stop at the first finding - list every qualifying issue. Then append the required non-blocking callouts section.`;
 
 async function loadProjectReviewGuidelines(cwd: string): Promise<string | null> {
 	let currentDir = path.resolve(cwd);
@@ -1450,6 +1454,8 @@ export default function reviewExtension(pi: ExtensionAPI) {
 			fullPrompt += `\n\nThis project has additional instructions for code reviews:\n\n${projectGuidelines}`;
 		}
 
+		fullPrompt += "\n\nFinal language requirement: write the entire user-facing review in Simplified Chinese, except for priority tags, file paths, code, identifiers, and literal error messages.";
+
 		const modeHint = useFreshSession ? " (fresh session)" : "";
 		ctx.ui.notify(`Starting review: ${hint}${modeHint}`, "info");
 
@@ -1862,61 +1868,61 @@ export default function reviewExtension(pi: ExtensionAPI) {
 	});
 
 	// Custom prompt for review summaries - focuses on preserving actionable findings
-	const REVIEW_SUMMARY_PROMPT = `We are leaving a code-review branch and returning to the main coding branch.
-Create a structured handoff that can be used immediately to implement fixes.
+	const REVIEW_SUMMARY_PROMPT = `我们即将离开代码审查分支并返回主编码分支。
+请创建一份可立即用于实施修复的结构化交接摘要，并全程使用简体中文。
 
-You MUST summarize the review that happened in this branch so findings can be acted on.
-Do not omit findings: include every actionable issue that was identified.
+必须总结此分支中完成的审查，以便后续处理问题。
+不得遗漏问题：包含已识别的每一个可操作问题。
 
-Required sections (in order):
+按以下顺序使用这些章节：
 
-## Review Scope
-- What was reviewed (files/paths, changes, and scope)
+## 审查范围
+- 审查了什么（文件/路径、变更和范围）
 
-## Verdict
-- "correct" or "needs attention"
+## 结论
+- 仅写“正确”或“需要关注”
 
-## Findings
-For EACH finding, include:
-- Priority tag ([P0]..[P3]) and short title
-- File location (\`path/to/file.ext:line\`)
-- Why it matters (brief)
-- What should change (brief, actionable)
+## 问题
+每个问题都应包含：
+- 优先级标签（[P0]..[P3]）和简短标题
+- 文件位置（\`path/to/file.ext:line\`）
+- 重要原因（简述）
+- 应如何修改（简短且可操作）
 
-## Fix Queue
-1. Ordered implementation checklist (highest priority first)
+## 修复队列
+1. 按优先级从高到低排列的实施清单
 
-## Constraints & Preferences
-- Any constraints or preferences mentioned during review
-- Or "(none)"
+## 约束与偏好
+- 审查期间提到的任何约束或偏好
+- 如无则写“（无）”
 
-## Human Reviewer Callouts (Non-Blocking)
-Include only applicable callouts (no yes/no lines):
-- **This change adds a database migration:** <files/details>
-- **This change introduces a new dependency:** <package(s)/details>
-- **This change changes a dependency (or the lockfile):** <files/package(s)/details>
-- **This change modifies auth/permission behavior:** <what changed and where>
-- **This change introduces backwards-incompatible public schema/API/contract changes:** <what changed and where>
-- **This change includes irreversible or destructive operations:** <operation and scope>
+## 人工审查提醒（非阻塞）
+仅包含适用项（不要输出是/否行）：
+- **此变更新增数据库迁移：** <文件/详情>
+- **此变更新增依赖：** <软件包/详情>
+- **此变更修改依赖（或锁文件）：** <文件/软件包/详情>
+- **此变更修改身份验证或权限行为：** <变更内容和位置>
+- **此变更引入不向后兼容的公共架构/API/契约变更：** <变更内容和位置>
+- **此变更包含不可逆或破坏性操作：** <操作和范围>
 
-If none apply, write "- (none)".
+如无适用项，写“- （无）”。
 
-These are informational callouts for humans and are not fix items by themselves.
+这些提醒仅供人工审查者参考，本身不是修复项。
 
-Preserve exact file paths, function names, and error messages where available.`;
+尽可能保留准确的文件路径、函数名和错误消息。`;
 
-	const REVIEW_FIX_FINDINGS_PROMPT = `Use the latest review summary in this session and implement the review findings now.
+	const REVIEW_FIX_FINDINGS_PROMPT = `使用此会话中最新的审查摘要，立即实施其中的问题修复，并全程使用简体中文输出。
 
-Instructions:
-1. Treat the summary's Findings/Fix Queue as a checklist.
-2. Fix in priority order: P0, P1, then P2 (include P3 if quick and safe).
-3. If a finding is invalid/already fixed/not possible right now, briefly explain why and continue.
-4. Treat "Human Reviewer Callouts (Non-Blocking)" as informational only; do not convert them into fix tasks unless there is a separate explicit finding.
-5. Follow fail-fast error handling: do not add local catch/fallback recovery unless this scope is an explicit boundary that can safely translate the failure.
-6. If you add or keep a \`try/catch\`, explain the expected failure mode and either rethrow with context or return a boundary-safe error response.
-7. JSON parsing/decoding should fail loudly by default; avoid silent fallback parsing.
-8. Run relevant tests/checks for touched code where practical.
-9. End with: fixed items, deferred/skipped items (with reasons), and verification results.`;
+要求：
+1. 将摘要中的“问题”和“修复队列”视为检查清单。
+2. 按 P0、P1、P2 的顺序修复；如果 P3 能快速安全地完成，也一并修复。
+3. 如果某个问题无效、已修复或当前无法处理，请简要说明原因并继续。
+4. “人工审查提醒（非阻塞）”仅供参考；除非另有明确问题，否则不要将其转为修复任务。
+5. 遵循快速失败错误处理：除非当前作用域是可安全转换失败的明确边界，否则不要添加本地 catch 或回退恢复。
+6. 如果添加或保留 \`try/catch\`，说明预期失败模式，并重新抛出带上下文的错误或返回边界安全的错误响应。
+7. JSON 解析/解码默认应明确失败，避免静默回退解析。
+8. 在可行时运行与所改代码相关的测试/检查。
+9. 最后总结：已修复项、延期/跳过项（附原因）以及验证结果。`;
 
 	type EndReviewAction = "returnOnly" | "returnAndFix" | "returnAndSummarize";
 	type EndReviewActionResult = "ok" | "cancelled" | "error";
