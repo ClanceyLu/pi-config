@@ -7,21 +7,41 @@ import type { TestContext } from "node:test";
 
 const codingAgentStub = `data:text/javascript,${encodeURIComponent(`
 	export const CONFIG_DIR_NAME = ".pi";
+	export const DEFAULT_MAX_BYTES = 50 * 1024;
 	export function getAgentDir() { return "/nonexistent-reasoning-mode-agent"; }
 	export function isToolCallEventType(name, event) { return event.toolName === name; }
+	export function generateDiffString(oldText, newText) { return { diff: "-1 " + oldText + "\\n+1 " + newText, firstChangedLine: 1 }; }
+	export function getMarkdownTheme() { return {}; }
+	export function renderDiff(text) { return text; }
+`)}`;
+const tuiStub = `data:text/javascript,${encodeURIComponent(`
+	export class Container { children = []; addChild(child) { this.children.push(child); } render() { return []; } invalidate() {} }
+	export class Text { constructor(text) { this.text = text; } setText(text) { this.text = text; } render() { return [this.text]; } invalidate() {} }
+	export class Markdown extends Text {}
+`)}`;
+const typeboxStub = `data:text/javascript,${encodeURIComponent(`
+	export const Type = { String: (options = {}) => ({ type: "string", ...options }), Object: (properties) => ({ type: "object", properties, required: Object.keys(properties) }) };
 `)}`;
 registerHooks({
 	resolve(specifier, context, nextResolve) {
 		if (specifier === "@earendil-works/pi-coding-agent") return { url: codingAgentStub, shortCircuit: true };
+		if (specifier === "@earendil-works/pi-tui") return { url: tuiStub, shortCircuit: true };
+		if (specifier === "typebox") return { url: typeboxStub, shortCircuit: true };
 		return nextResolve(specifier, context);
 	},
 });
 
 const { default: reasoningModeExtension } = await import("./index.ts");
 
-type BranchEntry = { type: string; customType?: string; data?: unknown };
+type BranchEntry = { type: string; customType?: string; data?: unknown; message?: Record<string, any> };
 type Handler = (event: Record<string, any>, ctx: FakeContext) => any;
 type RegisteredCommand = { handler: (args: string, ctx: FakeContext) => Promise<void> | void };
+type RegisteredTool = {
+	name: string;
+	execute: (id: string, params: Record<string, any>, signal: undefined, onUpdate: undefined, ctx: FakeContext) => Promise<any>;
+	renderCall?: (...args: any[]) => any;
+	renderResult?: (...args: any[]) => any;
+};
 
 interface FakeContext {
 	cwd: string;
@@ -48,6 +68,7 @@ interface HarnessStore {
 	notifications: Array<{ message: string; level: string }>;
 	statuses: Map<string, string | undefined>;
 	commands: Map<string, RegisteredCommand>;
+	tools: Map<string, RegisteredTool>;
 	handlers: Map<string, Handler>;
 	userMessages: string[];
 	customMessages: Array<{
@@ -82,6 +103,11 @@ function createApi(store: HarnessStore) {
 	return {
 		registerFlag: () => {},
 		registerCommand: (name: string, command: RegisteredCommand) => store.commands.set(name, command),
+		registerTool: (tool: RegisteredTool) => {
+			store.tools.set(tool.name, tool);
+			if (!store.allTools.includes(tool.name)) store.allTools.push(tool.name);
+			if (!store.activeTools.includes(tool.name)) store.activeTools.push(tool.name);
+		},
 		registerShortcut: () => {},
 		on: (name: string, handler: Handler) => store.handlers.set(name, handler),
 		getFlag: (name: string) => store.flags[name] ?? false,
@@ -175,7 +201,7 @@ export async function harness(
 		allTools: [...(options.allTools ?? ["read", "bash", "edit", "write", "grep", "find", "ls", "questionnaire", "external"])],
 		branch: structuredClone(options.branch ?? []), idle: true,
 		flags: { plan: options.planFlag ?? false, reasoning: options.reasoningFlag ?? false },
-		appended: [], notifications: [], statuses: new Map(), commands: new Map(), handlers: new Map(),
+		appended: [], notifications: [], statuses: new Map(), commands: new Map(), tools: new Map(), handlers: new Map(),
 		userMessages: [], customMessages: [], confirmQueue: [], skillPaths,
 		skillEnabled: { explore: options.exploreSkillEnabled ?? true, plan: options.skillEnabled ?? true },
 	};
@@ -201,6 +227,18 @@ export async function harness(
 		assistantMessage: async (text: string) => store.handlers.get("message_end")?.({
 			message: { role: "assistant", content: [{ type: "text", text }] },
 		}, ctx),
+		executeTool: async (name: string, params: Record<string, any>) => {
+			const gate = await store.handlers.get("tool_call")?.({ toolName: name, input: params }, ctx);
+			if (gate?.block) throw new Error(gate.reason);
+			const tool = store.tools.get(name);
+			assert.ok(tool, `missing tool ${name}`);
+			const result = await tool.execute("tool-call", params, undefined, undefined, ctx);
+			store.branch.push({
+				type: "message",
+				message: { role: "toolResult", toolName: name, content: result.content, details: result.details },
+			});
+			return result;
+		},
 		beforeAgent: async () => store.handlers.get("before_agent_start")?.({
 			prompt: "task", systemPrompt: "BASE", systemPromptOptions: {
 				cwd: root,

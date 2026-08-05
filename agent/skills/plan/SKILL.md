@@ -71,12 +71,28 @@ Each implementation step should identify:
 - how to verify it
 - important risks or compatibility concerns
 
-Return the plan directly as Markdown in the conversation and revise it through normal follow-up discussion.
+Revise the plan through normal follow-up discussion. Never ask the model to calculate or annotate its own diff.
 
-When and only when the response contains a complete final plan with no unresolved material questions, append this exact standalone final line after the plan:
+### TUI plan submission
+
+When the `submit_plan` tool is available:
+
+- Call it only when the plan is complete and no material questions remain unresolved.
+- Pass the complete current Markdown plan beginning with `# Plan:`. Never pass a partial update, change summary, or diff.
+- Do not include the readiness marker in the tool argument.
+- For every complete revision, call `submit_plan` again with the entire revised plan.
+- After the tool succeeds, do not repeat the plan in the assistant response. Respond only with a concise confirmation and the readiness marker below as the final standalone line.
+
+The extension renders the first submitted plan as Markdown and later submissions as a full Git-style diff while retaining the clean current plan for approval.
+
+### Fallback submission
+
+When `submit_plan` is unavailable, return the complete plan directly as Markdown in the conversation as before.
+
+When and only when the turn has produced or successfully submitted a complete final plan with no unresolved material questions, append this exact standalone final line:
 
 ```text
 <!-- reasoning-mode:plan-ready -->
 ```
 
-Do not emit the marker while asking clarifying questions, presenting incomplete options, or producing a partial draft. Every revised complete final plan must emit the marker again. The extension uses it to permit `/plan approve`; the marker does not itself leave Reasoning Mode. When the user is satisfied, they may run `/plan approve`; the extension—not this skill—will leave Reasoning Mode, restore the previous tools, and start executing the latest complete plan.
+Do not call `submit_plan` or emit the marker while asking clarifying questions, presenting incomplete options, or producing a partial draft. Every revised complete final plan must be submitted or printed in full and must emit the marker again. The extension uses it to permit `/plan approve`; the marker does not itself leave Reasoning Mode. When the user is satisfied, they may run `/plan approve`; the extension—not this skill—will leave Reasoning Mode, restore the previous tools, and start executing the latest complete plan.

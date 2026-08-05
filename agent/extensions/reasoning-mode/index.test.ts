@@ -69,6 +69,7 @@ test("/plan and /reasoning plan activate the same skill without a Plan workflow"
 	assert.deepEqual(h.store.userMessages, ["design memory"]);
 	assert.equal(h.activeTools().includes("edit"), false);
 	assert.equal(h.activeTools().includes("write"), false);
+	assert.equal(h.activeTools().includes("submit_plan"), true);
 	assert.equal(h.store.statuses.get("reasoning-mode"), "REASON · plan");
 
 	await h.command("reasoning", "plan redesign cache");
@@ -88,7 +89,9 @@ test("/plan approve leaves Reasoning Mode, restores tools, and starts plan execu
 	await h.start();
 	await h.command("plan", "design memory");
 	assert.equal(h.latestState()?.activeSkill, "plan");
-	await h.assistantMessage(`# Plan: Memory\n\n## Implementation steps\n1. Implement it.\n\n${PLAN_READY_MARKER}`);
+	await h.beforeAgent();
+	await h.executeTool("submit_plan", { plan: "# Plan: Memory\n\n## Implementation steps\n1. Implement it." });
+	await h.assistantMessage(`Plan submitted.\n\n${PLAN_READY_MARKER}`);
 	assert.equal(h.latestState()?.planReady, true);
 
 	await h.command("plan", "approve");
@@ -111,7 +114,7 @@ test("/plan approve keeps incomplete or revised plans in read-only Reasoning Mod
 	const h = await harness(t);
 	await h.start();
 	await h.command("plan", "design memory");
-	await h.assistantMessage(`I still need a material answer.\n\n${PLAN_READY_MARKER}\n\nPlease choose an option.`);
+	await h.assistantMessage(`Plan submitted without the required tool.\n\n${PLAN_READY_MARKER}`);
 
 	await h.command("plan", "approve");
 	assert.equal(h.latestState()?.mode, "reasoning");
@@ -122,7 +125,8 @@ test("/plan approve keeps incomplete or revised plans in read-only Reasoning Mod
 	assert.equal(h.store.customMessages.length, 0);
 	assert.match(h.store.notifications.at(-1)?.message ?? "", /plan is not complete yet/);
 
-	await h.assistantMessage(`# Plan: Memory\n\n## Implementation steps\n1. Implement it.\n\n${PLAN_READY_MARKER}`);
+	await h.executeTool("submit_plan", { plan: "# Plan: Memory\n\n## Implementation steps\n1. Implement it." });
+	await h.assistantMessage(`Plan submitted.\n\n${PLAN_READY_MARKER}`);
 	assert.equal(h.latestState()?.planReady, true);
 	assert.deepEqual(await h.input("Revise the storage choice"), { action: "continue" });
 	await h.beforeAgent();
@@ -228,6 +232,7 @@ test("questionnaire is temporarily enabled only in TUI mode", async (t) => {
 	await tui.start();
 	await tui.command("reasoning", "on");
 	assert.equal(tui.activeTools().includes("questionnaire"), true);
+	assert.equal(tui.activeTools().includes("submit_plan"), false);
 	assert.equal(await tui.toolCall("questionnaire", { questions: [] }), undefined);
 
 	const rpc = await harness(t, { activeTools: ["read", "questionnaire", "edit"], mode: "rpc" });
@@ -331,6 +336,7 @@ test("--reasoning and --plan initialize the intended state", async (t) => {
 	await plan.start();
 	assert.equal(plan.latestState()?.mode, "reasoning");
 	assert.equal(plan.latestState()?.activeSkill, "plan");
+	assert.equal(plan.activeTools().includes("submit_plan"), true);
 });
 
 test("mode-changing commands and reasoning skill invocations are rejected while the agent is busy", async (t) => {

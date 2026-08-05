@@ -17,9 +17,12 @@ test("Reasoning Mode prompt keeps only mode-wide invariants and common requireme
 	assert.doesNotMatch(prompt, /Consider multiple plausible hypotheses or approaches/);
 });
 
-test("plan skill emits the readiness marker only for a complete final plan", async () => {
+test("plan skill uses submit_plan in TUI with a complete Markdown fallback", async () => {
 	const skill = await fs.readFile(new URL("../../skills/plan/SKILL.md", import.meta.url), "utf8");
-	assert.match(skill, /When and only when the response contains a complete final plan/);
-	assert.match(skill, /Do not emit the marker while asking clarifying questions/);
+	assert.match(skill, /When the `submit_plan` tool is available/);
+	assert.match(skill, /Pass the complete current Markdown plan/);
+	assert.match(skill, /Never pass a partial update, change summary, or diff/);
+	assert.match(skill, /When `submit_plan` is unavailable, return the complete plan directly/);
+	assert.match(skill, /Do not call `submit_plan` or emit the marker while asking clarifying questions/);
 	assert.ok(skill.includes(PLAN_READY_MARKER));
 });

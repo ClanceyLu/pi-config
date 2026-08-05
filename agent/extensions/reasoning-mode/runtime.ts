@@ -8,6 +8,7 @@ import type {
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import { registerReasoningCommands } from "./commands.ts";
 import { loadConfig } from "./config.ts";
+import { registerPlanTool } from "./plan-tool.ts";
 import { classifyBashCommand, classifyTool, reasoningToolSet } from "./policy.ts";
 import { reasoningModePrompt } from "./prompt.ts";
 import {
@@ -28,6 +29,7 @@ import {
 	DEFAULT_REASONING_SKILL,
 	INITIAL_STATE,
 	PLAN_READY_MARKER,
+	PLAN_SUBMIT_TOOL_NAME,
 	type ReasoningModeConfig,
 	type ReasoningModeState,
 } from "./types.ts";
@@ -62,6 +64,7 @@ function isCompletedPlanMessage(message: unknown): boolean {
 export class ReasoningModeRuntime {
 	private state: ReasoningModeState = structuredClone(INITIAL_STATE);
 	private config: ReasoningModeConfig = structuredClone(DEFAULT_CONFIG);
+	private planSubmittedThisRun = false;
 	private readonly pi: ExtensionAPI;
 
 	constructor(pi: ExtensionAPI) {
@@ -71,6 +74,10 @@ export class ReasoningModeRuntime {
 	register(): void {
 		this.pi.registerFlag("reasoning", { description: "Start in read-only Reasoning Mode", type: "boolean", default: false });
 		this.pi.registerFlag("plan", { description: "Start Reasoning Mode with the plan skill", type: "boolean", default: false });
+		registerPlanTool(this.pi, {
+			canSubmit: (ctx) => this.state.mode === "reasoning" && this.state.activeSkill === "plan" && ctx.mode === "tui",
+			onSubmitted: () => { this.planSubmittedThisRun = true; },
+		});
 		registerReasoningCommands(this.pi, {
 			getState: () => this.state,
 			getConfig: () => this.config,
@@ -99,15 +106,20 @@ export class ReasoningModeRuntime {
 		return this.pi.getAllTools().map((tool) => tool.name);
 	}
 
+	private withoutInternalTools(tools: string[]): string[] {
+		return tools.filter((name) => name !== PLAN_SUBMIT_TOOL_NAME);
+	}
+
 	private applyReasoningTools(ctx: ExtensionContext): void {
-		const snapshot = this.state.toolsBeforeReasoning ?? this.pi.getActiveTools();
-		this.pi.setActiveTools(reasoningToolSet(snapshot, this.allToolNames(), this.config, ctx.mode));
+		const snapshot = this.withoutInternalTools(this.state.toolsBeforeReasoning ?? this.pi.getActiveTools());
+		this.pi.setActiveTools(reasoningToolSet(snapshot, this.allToolNames(), this.config, ctx.mode, this.state.activeSkill));
 	}
 
 	private enter(ctx: ExtensionContext, activeSkill?: string): void {
-		const snapshot = this.state.mode === "reasoning" && this.state.toolsBeforeReasoning
+		const snapshot = this.withoutInternalTools(this.state.mode === "reasoning" && this.state.toolsBeforeReasoning
 			? this.state.toolsBeforeReasoning
-			: this.pi.getActiveTools();
+			: this.pi.getActiveTools());
+		this.planSubmittedThisRun = false;
 		this.state = { version: 2, mode: "reasoning", activeSkill, toolsBeforeReasoning: snapshot };
 		this.applyReasoningTools(ctx);
 		this.persistState();
@@ -120,7 +132,8 @@ export class ReasoningModeRuntime {
 			ctx.ui.notify("Reasoning Mode is already off.", "info");
 			return;
 		}
-		this.pi.setActiveTools(this.state.toolsBeforeReasoning ?? this.pi.getActiveTools());
+		this.pi.setActiveTools(this.withoutInternalTools(this.state.toolsBeforeReasoning ?? this.pi.getActiveTools()));
+		this.planSubmittedThisRun = false;
 		this.state = structuredClone(INITIAL_STATE);
 		this.persistState();
 		this.updateUI(ctx);
@@ -172,7 +185,8 @@ export class ReasoningModeRuntime {
 	}
 
 	private async restoreBranchState(ctx: ExtensionContext, honorFlags: boolean): Promise<void> {
-		const baseline = this.state.toolsBeforeReasoning ?? this.pi.getActiveTools();
+		const baseline = this.withoutInternalTools(this.state.toolsBeforeReasoning ?? this.pi.getActiveTools());
+		this.planSubmittedThisRun = false;
 		const branch = ctx.sessionManager.getBranch();
 		const saved = [...branch].reverse().find(
 			(entry) => entry.type === "custom"
@@ -195,9 +209,12 @@ export class ReasoningModeRuntime {
 			);
 		}
 		let shouldPersist = Boolean(honorFlags && (legacy || previous));
-		if (this.state.mode === "reasoning" && !this.state.toolsBeforeReasoning) {
-			this.state = { ...this.state, toolsBeforeReasoning: baseline };
-			shouldPersist = shouldPersist || honorFlags;
+		if (this.state.mode === "reasoning") {
+			const restoredTools = this.withoutInternalTools(this.state.toolsBeforeReasoning ?? baseline);
+			if (!this.state.toolsBeforeReasoning || restoredTools.length !== this.state.toolsBeforeReasoning.length) {
+				this.state = { ...this.state, toolsBeforeReasoning: restoredTools };
+				shouldPersist = shouldPersist || honorFlags;
+			}
 		}
 		if (honorFlags && this.pi.getFlag("plan") === true) {
 			this.state = { version: 2, mode: "reasoning", activeSkill: "plan", toolsBeforeReasoning: this.state.toolsBeforeReasoning ?? baseline };
@@ -222,6 +239,8 @@ export class ReasoningModeRuntime {
 		const name = this.state.activeSkill;
 		if (!name) return reason;
 		this.state = { ...this.state, activeSkill: undefined };
+		this.planSubmittedThisRun = false;
+		this.applyReasoningTools(ctx);
 		this.persistState();
 		this.updateUI(ctx);
 		ctx.ui.notify(reason, "error");
@@ -246,6 +265,10 @@ export class ReasoningModeRuntime {
 
 	private async handleToolCall(event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> {
 		if (this.state.mode !== "reasoning") return;
+		if (event.toolName === PLAN_SUBMIT_TOOL_NAME
+			&& (this.state.activeSkill !== "plan" || ctx.mode !== "tui")) {
+			return { block: true, reason: "Reasoning Mode: submit_plan is available only in the TUI plan workflow." };
+		}
 		if (event.toolName === "questionnaire" && ctx.mode !== "tui") {
 			return { block: true, reason: "Reasoning Mode: questionnaire is available only in TUI mode." };
 		}
@@ -292,13 +315,20 @@ export class ReasoningModeRuntime {
 		});
 		this.pi.on("before_agent_start", async (event, ctx) => {
 			if (this.state.mode !== "reasoning") return;
-			if (this.state.activeSkill === "plan" && this.state.planReady === true) this.setPlanReady(false);
+			if (this.state.activeSkill === "plan") {
+				this.planSubmittedThisRun = false;
+				if (this.state.planReady === true) this.setPlanReady(false);
+			}
 			const skill = await this.skillPrompt(event.systemPromptOptions, ctx);
 			const additions = [reasoningModePrompt(this.state.activeSkill), skill.content, skill.failure].filter(Boolean).join("\n\n");
 			return { systemPrompt: `${event.systemPrompt}\n\n${additions}` };
 		});
-		this.pi.on("message_end", (event) => {
-			if (this.state.mode === "reasoning" && this.state.activeSkill === "plan" && isCompletedPlanMessage(event.message)) {
+		this.pi.on("message_end", (event, ctx) => {
+			const planToolRequired = ctx.mode === "tui" && this.pi.getActiveTools().includes(PLAN_SUBMIT_TOOL_NAME);
+			if (this.state.mode === "reasoning"
+				&& this.state.activeSkill === "plan"
+				&& isCompletedPlanMessage(event.message)
+				&& (!planToolRequired || this.planSubmittedThisRun)) {
 				this.setPlanReady(true);
 			}
 		});

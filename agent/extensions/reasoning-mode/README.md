@@ -16,6 +16,17 @@ A branch-aware, fail-closed read-only container that pins one explicitly marked 
 
 Reasoning Mode never exits because the user merely says "implement", "approve", or "proceed". Use `/reasoning off` explicitly, or `/plan approve` after the plan skill has produced a complete final plan to exit and immediately execute it. Approval is rejected while clarification is still in progress, when the plan workflow is not active, or when the agent is busy. On exit, the extension records a hidden model-facing transition so instructions from the former mode and skill are not carried into the next request. Only one reasoning skill is active at a time: activating `plan` replaces `explore`, and `/reasoning on` switches back to `explore`.
 
+## Plan diff display
+
+In TUI mode, the plan skill submits each complete plan through the extension-owned `submit_plan` tool. The first version is rendered as normal Markdown. Later versions are rendered as a full Git-style diff against the preceding plan on the active session branch:
+
+- green `+` lines are additions
+- red `-` lines are removed text and are not part of the current plan
+- unchanged lines remain visible instead of being collapsed into diff hunks
+- adjacent changed lines receive Pi's built-in intra-line highlighting
+
+The tool result sent to the model always contains the clean, complete current Markdown plan. Diff markers are presentation-only, so `/plan approve` executes the latest plan rather than the rendered patch. Plan versions follow `/tree` branches and survive session resume. `submit_plan` is disabled outside the TUI plan workflow; print, JSON, and RPC modes retain the normal full-Markdown response.
+
 The core mode prompt owns read-only safety, tool restrictions, evidence requirements, and explicit exit behavior. Skills specialize the workflow but cannot relax those invariants. If a newly requested skill is unavailable, activation is rejected without changing the current mode or tool set. Saved v1 sessions that used skill-less neutral Reasoning Mode migrate to `explore` when restored.
 
 ## Configuration

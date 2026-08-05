@@ -8,20 +8,24 @@ const config: ReasoningModeConfig = structuredClone(DEFAULT_CONFIG);
 test("known read tools and questionnaire are allowed while mutations and unknown tools fail closed", () => {
 	assert.equal(classifyTool("read", config).action, "allow");
 	assert.equal(classifyTool("questionnaire", config).action, "allow");
+	assert.equal(classifyTool("submit_plan", config).action, "allow");
 	assert.equal(classifyTool("edit", { ...config, tools: { edit: "allow" } }).action, "deny");
 	assert.equal(classifyTool("write", config).action, "deny");
 	assert.equal(classifyTool("custom", config).action, "deny");
 });
 
-test("Reasoning tool set adds questionnaire only for TUI and respects strict shell policy", () => {
-	const all = ["read", "bash", "edit", "write", "grep", "find", "ls", "questionnaire"];
-	assert.deepEqual(reasoningToolSet(["read", "bash", "edit"], all, config, "tui"), [
+test("Reasoning tool set scopes TUI-only tools and respects strict shell policy", () => {
+	const all = ["read", "bash", "edit", "write", "grep", "find", "ls", "questionnaire", "submit_plan"];
+	assert.deepEqual(reasoningToolSet(["read", "bash", "edit"], all, config, "tui", "plan"), [
+		"read", "bash", "grep", "find", "ls", "questionnaire", "submit_plan",
+	]);
+	assert.deepEqual(reasoningToolSet(["read", "bash", "edit"], all, config, "tui", "explore"), [
 		"read", "bash", "grep", "find", "ls", "questionnaire",
 	]);
-	assert.deepEqual(reasoningToolSet(["read", "bash", "questionnaire"], all, config, "rpc"), [
+	assert.deepEqual(reasoningToolSet(["read", "bash", "questionnaire", "submit_plan"], all, config, "rpc", "plan"), [
 		"read", "bash", "grep", "find", "ls",
 	]);
-	assert.equal(reasoningToolSet(["read", "bash"], all, { ...config, shellPolicy: "strict" }, "tui").includes("bash"), false);
+	assert.equal(reasoningToolSet(["read", "bash"], all, { ...config, shellPolicy: "strict" }, "tui", "plan").includes("bash"), false);
 });
 
 test("shell tokenizer handles quotes and rejects incomplete input", () => {

@@ -1,7 +1,7 @@
-import type { PermissionAction, ReasoningModeConfig } from "./types.ts";
+import { PLAN_SUBMIT_TOOL_NAME, type PermissionAction, type ReasoningModeConfig } from "./types.ts";
 
 const ALWAYS_DENIED_TOOLS = new Set(["edit", "write"]);
-const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls", "questionnaire"]);
+const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls", "questionnaire", PLAN_SUBMIT_TOOL_NAME]);
 
 export interface PolicyDecision {
 	action: PermissionAction;
@@ -147,12 +147,15 @@ export function reasoningToolSet(
 	allToolNames: string[],
 	config: ReasoningModeConfig,
 	mode: "tui" | "rpc" | "json" | "print",
+	activeSkill?: string,
 ): string[] {
 	const candidates = [...toolsBeforeReasoning, "read", "grep", "find", "ls"];
 	if (mode === "tui" && allToolNames.includes("questionnaire")) candidates.push("questionnaire");
+	if (mode === "tui" && activeSkill === "plan" && allToolNames.includes(PLAN_SUBMIT_TOOL_NAME)) candidates.push(PLAN_SUBMIT_TOOL_NAME);
 	return [...new Set(candidates)].filter((name) => {
 		if (!allToolNames.includes(name)) return false;
 		if (name === "questionnaire" && mode !== "tui") return false;
+		if (name === PLAN_SUBMIT_TOOL_NAME && (mode !== "tui" || activeSkill !== "plan")) return false;
 		if (name === "bash") return config.shellPolicy !== "strict" && config.tools.bash !== "deny";
 		return classifyTool(name, config).action !== "deny";
 	});
