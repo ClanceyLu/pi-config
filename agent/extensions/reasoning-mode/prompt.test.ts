@@ -22,6 +22,8 @@ test("plan skill uses submit_plan in TUI with a complete Markdown fallback", asy
 	assert.match(skill, /When the `submit_plan` tool is available/);
 	assert.match(skill, /Pass the complete current Markdown plan/);
 	assert.match(skill, /Never pass a partial update, change summary, or diff/);
+	assert.match(skill, /Keep the final plan concise and execution-focused/);
+	assert.match(skill, /do not create separate sections for them by default/);
 	assert.match(skill, /When `submit_plan` is unavailable, return the complete plan directly/);
 	assert.match(skill, /Do not call `submit_plan` or emit the marker while asking clarifying questions/);
 	assert.ok(skill.includes(PLAN_READY_MARKER));

@@ -43,33 +43,25 @@ Use this workflow for any project change: features, bug-fix planning, refactors,
 
 ## Final output
 
-Use this structure, omitting only sections that are genuinely irrelevant:
+Keep the final plan concise and execution-focused. Summarize the outcome instead of repeating the investigation or discussion. Use this compact structure:
 
 ```markdown
 # Plan: <title>
 
 ## Goal
-## Requirements and acceptance criteria
-## Current implementation
-## Relevant files and modules
-## Confirmed decisions
-## Options considered
-## Recommended approach
-## Implementation steps
-## Testing and verification
-## Risks and edge cases
-## Assumptions
-## Out of scope
+<desired outcome and essential acceptance criteria>
+
+## Changes
+1. `<file or module>` — <concrete change>
+
+## Verification
+- <test or check>
+
+## Risks
+- <material risk or compatibility concern, only when needed>
 ```
 
-Each implementation step should identify:
-
-- affected files or modules
-- the concrete change
-- why it is needed
-- dependencies on other steps
-- how to verify it
-- important risks or compatibility concerns
+Prefer short bullets. Each change should name the affected file or module and the concrete work. Include rationale, dependencies, assumptions, rejected options, or out-of-scope notes only when they materially affect implementation; do not create separate sections for them by default. Omit `Risks` when there are no material risks.
 
 Revise the plan through normal follow-up discussion. Never ask the model to calculate or annotate its own diff.
 
@@ -83,7 +75,7 @@ When the `submit_plan` tool is available:
 - For every complete revision, call `submit_plan` again with the entire revised plan.
 - After the tool succeeds, do not repeat the plan in the assistant response. Respond only with a concise confirmation and the readiness marker below as the final standalone line.
 
-The extension renders the first submitted plan as Markdown and later submissions as a full Git-style diff while retaining the clean current plan for approval.
+The extension streams the submitted Markdown in the TUI as the tool arguments arrive, then finalizes that same preview in place. The first version remains Markdown and later submissions become a full Git-style diff, while the clean current plan is retained for approval.
 
 ### Fallback submission
 

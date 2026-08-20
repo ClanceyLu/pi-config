@@ -32,14 +32,55 @@ test("submit_plan stores a clean first plan and computes a full revision diff", 
 	assert.match(second.details.diff, /Use Redis/);
 	assert.doesNotMatch(second.content[0].text, /^[-+]/m);
 
-	const renderer = h.store.tools.get("submit_plan")?.renderResult;
-	assert.ok(renderer);
-	const rendered = renderer(second, { expanded: false }, {
+	const tool = h.store.tools.get("submit_plan");
+	assert.ok(tool?.renderCall);
+	assert.ok(tool.renderResult);
+	const theme = {
 		fg: (_color: string, text: string) => text,
 		bold: (text: string) => text,
-	});
-	assert.match(rendered.children[0].text, /Plan v2 · compared with v1/);
-	assert.match(rendered.children[1].text, /Use Redis/);
+	};
+	const state: Record<string, unknown> = {};
+	const partial = tool.renderCall(
+		{ plan: "# Plan: Ca" },
+		theme,
+		{ lastComponent: undefined, state, argsComplete: false },
+	);
+	assert.equal(partial.children[1].text, "# Plan: Ca");
+
+	const throttled = tool.renderCall(
+		{ plan: "# Plan: Cache" },
+		theme,
+		{ lastComponent: partial, state, argsComplete: false },
+	);
+	assert.equal(throttled.children[1].text, "# Plan: Ca");
+
+	const live = tool.renderCall(
+		{ plan: V2 },
+		theme,
+		{ lastComponent: partial, state, argsComplete: true },
+	);
+	assert.equal(live, partial);
+	assert.equal(live.children[1].text, V2);
+
+	const cappedState: Record<string, unknown> = {};
+	const capped = tool.renderCall(
+		{ plan: `# Plan: Huge\n\n${"界".repeat(5_000)}` },
+		theme,
+		{ lastComponent: undefined, state: cappedState, argsComplete: false },
+	);
+	assert.ok(Buffer.byteLength(capped.children[1].text, "utf8") <= 12 * 1024);
+	assert.doesNotMatch(capped.children[1].text, /�/);
+	assert.match(capped.children[2].text, /limited to 12288 bytes/);
+
+	const renderedResult = tool.renderResult(
+		second,
+		{ expanded: false },
+		theme,
+		{ lastComponent: undefined, state },
+	);
+	assert.equal(renderedResult.children.length, 0);
+	assert.match(live.children[0].text, /Plan v2 · compared with v1/);
+	assert.match(live.children[1].text, /Use Redis/);
 });
 
 test("an unchanged resubmission remains complete and is marked unchanged", async (t) => {

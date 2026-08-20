@@ -11,6 +11,8 @@ import { Container, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { PLAN_READY_MARKER, PLAN_SUBMIT_TOOL_NAME } from "./types.ts";
 const FULL_DIFF_CONTEXT = Number.MAX_SAFE_INTEGER;
+const LIVE_PREVIEW_MAX_BYTES = 12 * 1024;
+const LIVE_PREVIEW_MIN_DELTA_BYTES = 512;
 
 export interface SubmittedPlanDetails {
 	kind: "reasoning-plan";
@@ -29,6 +31,13 @@ interface PreviousPlan {
 interface PlanToolServices {
 	canSubmit(ctx: ExtensionContext): boolean;
 	onSubmitted(): void;
+}
+
+interface PlanRenderState {
+	planDisplay?: Container;
+	previewBytes?: number;
+	previewCapped?: boolean;
+	argsCompleteRendered?: boolean;
 }
 
 function textContent(content: unknown): string {
@@ -100,6 +109,51 @@ function renderPlanTitle(version: number, previousVersion: number | undefined, c
 	return new Text(theme.fg("accent", theme.bold(`Plan v${version} · ${comparison}`)), 0, 0);
 }
 
+function limitLivePreview(plan: string): { text: string; bytes: number; capped: boolean } {
+	// Inspect at most twice the byte cap: CRLF normalization can shrink two input
+	// characters to one output byte, so this still detects every oversized prefix.
+	const source = plan.slice(0, LIVE_PREVIEW_MAX_BYTES * 2 + 2);
+	const normalized = source.replace(/\r\n?/g, "\n");
+	const encoded = Buffer.from(normalized, "utf8");
+	if (source.length === plan.length && encoded.byteLength <= LIVE_PREVIEW_MAX_BYTES) {
+		return { text: normalized, bytes: encoded.byteLength, capped: false };
+	}
+
+	let end = LIVE_PREVIEW_MAX_BYTES;
+	while (end > 0 && (encoded[end] & 0xc0) === 0x80) end--;
+	return {
+		text: encoded.subarray(0, end).toString("utf8"),
+		bytes: end,
+		capped: true,
+	};
+}
+
+function renderLivePlan(
+	preview: { text: string; capped: boolean },
+	theme: Theme,
+	container?: Container,
+): Container {
+	const next = container ?? new Container();
+	next.clear();
+	next.addChild(new Text(theme.fg("toolTitle", theme.bold("Submit Plan")), 0, 0));
+	if (preview.text) next.addChild(new Markdown(preview.text, 0, 0, getMarkdownTheme()));
+	if (preview.capped) {
+		next.addChild(new Text(theme.fg("warning", `Live preview limited to ${LIVE_PREVIEW_MAX_BYTES} bytes.`), 0, 0));
+	}
+	return next;
+}
+
+function renderFinalPlan(details: SubmittedPlanDetails, theme: Theme, container = new Container()): Container {
+	container.clear();
+	container.addChild(renderPlanTitle(details.version, details.previousVersion, details.changed, theme));
+	if (details.diff) {
+		container.addChild(new Text(renderDiff(details.diff), 0, 0));
+	} else {
+		container.addChild(new Markdown(details.plan, 0, 0, getMarkdownTheme()));
+	}
+	return container;
+}
+
 export function registerPlanTool(pi: ExtensionAPI, services: PlanToolServices): void {
 	pi.registerTool({
 		name: PLAN_SUBMIT_TOOL_NAME,
@@ -140,25 +194,38 @@ export function registerPlanTool(pi: ExtensionAPI, services: PlanToolServices): 
 			return { content: [{ type: "text" as const, text: plan }], details };
 		},
 
-		renderCall(_args, theme, context) {
-			const text = context.lastComponent as Text | undefined ?? new Text("", 0, 0);
-			text.setText(theme.fg("toolTitle", theme.bold("Submit Plan")));
-			return text;
+		renderCall(args, theme, context) {
+			const state = context.state as PlanRenderState;
+			const preview = limitLivePreview(typeof args?.plan === "string" ? args.plan : "");
+			const previousBytes = state.previewBytes;
+			const shouldRender = !state.planDisplay
+				|| (context.argsComplete && !state.argsCompleteRendered)
+				|| state.previewCapped !== preview.capped
+				|| previousBytes === undefined
+				|| Math.abs(preview.bytes - previousBytes) >= LIVE_PREVIEW_MIN_DELTA_BYTES;
+
+			if (shouldRender) {
+				state.planDisplay = renderLivePlan(preview, theme, state.planDisplay);
+				state.previewBytes = preview.bytes;
+				state.previewCapped = preview.capped;
+				state.argsCompleteRendered = context.argsComplete;
+			}
+			return state.planDisplay!;
 		},
 
-		renderResult(result, _options, theme) {
+		renderResult(result, _options, theme, context) {
 			const details = result.details;
 			if (!isSubmittedPlanDetails(details)) {
 				return new Text(textContent(result.content), 0, 0);
 			}
-			const container = new Container();
-			container.addChild(renderPlanTitle(details.version, details.previousVersion, details.changed, theme));
-			if (details.diff) {
-				container.addChild(new Text(renderDiff(details.diff), 0, 0));
-			} else {
-				container.addChild(new Markdown(details.plan, 0, 0, getMarkdownTheme()));
-			}
-			return container;
+
+			const liveContainer = (context.state as PlanRenderState).planDisplay;
+			if (!liveContainer) return renderFinalPlan(details, theme);
+
+			// Replace the streamed call preview in place. Returning an empty result
+			// prevents the completed plan from being appended a second time.
+			renderFinalPlan(details, theme, liveContainer);
+			return new Container();
 		},
 	});
 }

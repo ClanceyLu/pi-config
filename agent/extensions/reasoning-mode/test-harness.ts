@@ -15,7 +15,7 @@ const codingAgentStub = `data:text/javascript,${encodeURIComponent(`
 	export function renderDiff(text) { return text; }
 `)}`;
 const tuiStub = `data:text/javascript,${encodeURIComponent(`
-	export class Container { children = []; addChild(child) { this.children.push(child); } render() { return []; } invalidate() {} }
+	export class Container { children = []; addChild(child) { this.children.push(child); } clear() { this.children = []; } render() { return []; } invalidate() {} }
 	export class Text { constructor(text) { this.text = text; } setText(text) { this.text = text; } render() { return [this.text]; } invalidate() {} }
 	export class Markdown extends Text {}
 `)}`;

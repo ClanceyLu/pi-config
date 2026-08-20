@@ -18,7 +18,7 @@ Reasoning Mode never exits because the user merely says "implement", "approve", 
 
 ## Plan diff display
 
-In TUI mode, the plan skill submits each complete plan through the extension-owned `submit_plan` tool. The first version is rendered as normal Markdown. Later versions are rendered as a full Git-style diff against the preceding plan on the active session branch:
+In TUI mode, the plan skill submits each complete plan through the extension-owned `submit_plan` tool. The Markdown is rendered live while the model streams the tool arguments instead of appearing only after submission completes. On completion, the same preview is finalized in place rather than printing the plan again. The first version remains normal Markdown; later versions become a full Git-style diff against the preceding plan on the active session branch:
 
 - green `+` lines are additions
 - red `-` lines are removed text and are not part of the current plan
