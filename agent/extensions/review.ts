@@ -435,6 +435,17 @@ Flag issues that:
 4. Apply system-level thinking; flag changes that increase operational risk or on-call wakeups.
 5. Ensure that errors are always checked against codes or stable identifiers, never error messages.
 
+## Documentation and product-rule consistency
+
+1. When changes affect public APIs, CLI arguments, configuration, environment variables, installation/deployment, usage workflows, or externally visible behavior, locate and read the relevant README sections, documentation, examples, and configuration guidance. Verify that they remain accurate; do not limit this check to files in the diff.
+2. When changes affect product rules, also check product specifications, membership/plan benefit tables, help content, and user-facing UI copy. Relevant rules include feature access, free quotas, usage limits, validity periods, pricing, billing, refunds, upgrades/downgrades, renewals, and expiration behavior.
+3. Check consistency in both directions: implementation may violate an established product rule, or an intentional rule change may leave documentation or UI copy outdated. Do not assume code is authoritative or automatically recommend changing documentation to match it. Use explicit requirements and applicable project guidance to determine the intended behavior.
+4. If intent cannot be established, describe the concrete discrepancy, affected scenario, and what requires confirmation without asserting which side is correct. Do not invent product rules or infer undocumented promises.
+5. Report only concrete inconsistencies introduced or materially worsened by the reviewed change: false descriptions, broken examples, missing necessary usage instructions, or conflicting product promises. Do not require documentation updates for every change, behavior-preserving internal refactors, or purely stylistic differences.
+6. Anchor each finding to the changed code or content that causes the inconsistency. In the body, cite the relevant documentation/specification/UI-copy file and smallest supporting line range, explain the mismatch, and state its impact on user entitlements, expectations, or operations. An unchanged document may be supporting evidence; it need not appear in the diff.
+7. Treat actionable inconsistencies as regular findings, not merely non-blocking human callouts. Assign priority according to demonstrated impact; uncertainty about intent alone is not proof of a bug. If an ambiguity prevents a finding, briefly state the unresolved discrepancy and confirmation needed in the verdict explanation, without treating it alone as blocking or adding it to the fix queue. Keep the required verdict value on its own line.
+8. If relevant documentation or product guidance cannot be found or accessed, disclose that verification limitation; do not claim consistency was verified or invent a documentation requirement.
+
 ## Complexity and maintainability constraints
 
 Apply these defaults to handwritten source code unless the project provides stricter or language-specific limits:
