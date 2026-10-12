@@ -11,3 +11,5 @@
 !/agent/extensions/**
 !/agent/skills/
 !/agent/skills/**
+!/agent/prompts/
+!/agent/prompts/**

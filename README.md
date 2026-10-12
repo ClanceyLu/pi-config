@@ -6,6 +6,7 @@
 - `agent/models.json`
 - `agent/extensions/`
 - `agent/skills/`
+- `agent/prompts/`
 
 认证信息、API key、sessions、模型缓存和 `agent/npm/` 安装产物不会进入 Git。
 
@@ -29,7 +30,7 @@ git clone git@github.com:ClanceyLu/pi-config.git ~/.pi
 cd ~/.pi
 backup="$HOME/.pi-config-backup-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$backup/agent"
-for name in settings.json models.json extensions skills; do
+for name in settings.json models.json extensions skills prompts; do
   if [[ -e "agent/$name" ]]; then
     mv "agent/$name" "$backup/agent/"
   fi
@@ -69,19 +70,33 @@ exec zsh
 
 ## 恢复 packages
 
-`agent/settings.json` 声明了 Pi packages，包括：
+`agent/settings.json` 声明了以下 packages：
 
-```text
-npm:@plannotator/pi-extension
-```
+- `npm:@juicesharp/rpiv-todo`
+- `npm:@dietrichgebert/ponytail`
 
-启动 Pi 时，package manager 会自动安装缺失的 package，因此无需恢复或提交 `agent/npm/`。也可用下面的命令查看当前声明：
+自定义扩展和 skills 由本仓库直接管理；`agent/prompts/` 用于可选提示词模板，目前没有模板文件。
+
+启动 Pi 时会自动安装缺失的 package，无需恢复或提交 `agent/npm/`。可用下面的命令查看当前声明：
 
 ```zsh
 pi list
 ```
 
 Sessions 不在仓库中，不会从 GitHub 恢复。
+
+### 更新与重载
+
+```zsh
+pi update                # 更新 Pi 本体
+pi update --extensions   # 更新声明的 packages
+pi update --models       # 刷新模型目录
+pi update --all          # 更新 Pi 本体和 packages
+```
+
+这些命令不会迁移仓库内手写的扩展或 skills。同步配置后，在 Pi 内运行 `/reload`。
+
+`/model` 和 `/thinking` 默认只修改当前会话；按 Ctrl+S 才保存启动默认值。
 
 ## 日常工作流
 
@@ -97,7 +112,7 @@ git pull --ff-only
 
 ```zsh
 git status
-git add .gitignore README.md agent/settings.json agent/models.json agent/extensions agent/skills
+git add .gitignore README.md agent/settings.json agent/models.json agent/extensions agent/skills agent/prompts
 git diff --cached
 git commit -m "Update Pi config"
 git pull --ff-only
