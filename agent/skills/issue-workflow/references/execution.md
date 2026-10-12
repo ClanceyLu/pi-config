@@ -1,5 +1,15 @@
 # Authorized writes and execution
 
+## App operations and diagnosis in the current PM session
+
+Explicit App run/install, cause investigation, error analysis, reproduction and test requests are current-session operations. Use the available session tools and report observed results, failures and unverified items in chat. Tool use, multi-step analysis or repository inspection does not require Issue creation/update, assignment or Agent startup. Do not read Multica merely to carry out these operations. An existing issue identifier or PM issue focus does not itself request a task write or follow-up status transition. Only explicit task recording or authorized code implementation enters the corresponding Issue workflow, with its existing ownership and trigger checks. An assigned Issue run still follows its runtime delivery rules.
+
+Verify the intended App, platform/environment and operation before acting; ask only when ambiguity affects the action. Clear ordinary run/install/test authorization needs no repeat confirmation. Confirm payment, elevation, permission changes, sensitive-data actions and destructive operations before the affected step; an installation request does not bypass these gates. Inspect install scripts and test side effects as relevant: source rewrites, destructive fixtures or deployment hooks need their own authorization. Preserve existing source and unrelated work, including generated changes; do not automatically stage, revert or clean them.
+
+Diagnosis/tests/install grant no source edits, fixes, commits, merges, pushes, deployment or Issue closure. “仅分析，不修改代码” remains diagnosis-only. If running or testing reveals a source defect, report evidence, impact and the proposed repair, then wait for repair authorization; do not silently patch, create an Issue or dispatch its owner. An explicitly requested task record follows the create/update route without implying assignment or startup. A subsequent authorized code fix follows the implementation route below, retaining Git isolation, acceptance and duplicate-trigger protections.
+
+## Issue execution authorization
+
 For Issue operations, read multica.md for target verification first. Assignment-only requests must use supported --no-start; if unavailable, stop and ask. For authorized create-then-assign operations, create without an assignee in the verified intended status, then assign with --no-start. Verify ownership and actual Run state afterward; do not keep monitoring.
 
 For code implementation, when the owner needs to handle a task, default to replying to or updating the issue with the problem, required changes and next step. General requests such as “执行”, “修复” or “写入 Skill” authorize the requested work, not a direct Run start. Call `rerun` or another direct start/restart operation only when the user explicitly requests directly starting or restarting a Run.

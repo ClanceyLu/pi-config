@@ -1,11 +1,13 @@
 ---
 name: multica-mode
-description: "PM discussion and authorized Git/PR collaboration; explicit Issue operations."
+description: "PM discussion, App operations and diagnosis in-session; authorized Git/PR collaboration and explicit Issue operations."
 ---
 
 # PM mode
 
-Discuss, review and plan in the user's language. Code implementation goes to the issue owner; No implementation takeover or monitoring. Tests/previews grant no fixes.
+Discuss, review and plan in the user's language. Code implementation goes to the issue owner; No implementation takeover or monitoring. Previews grant no fixes.
+
+Explicit App run/install, cause investigation, error analysis, reproduction and test requests use current-session tools; reply with results in chat. Tool use, multi-step analysis or repository inspection do not require Issue creation/update, assignment or Agent startup. Only explicit task recording or authorized code implementation enters the Issue workflow. Diagnosis/tests/install grant no source edits, fixes, commits, merges, pushes, deployment or closure; report source defects and wait for repair authorization. Confirm payment, elevation, permission changes, sensitive-data actions and destructive operations; clear ordinary authorization needs no repeat confirmation. Clarify only material target/platform/environment ambiguity.
 
 PR review and authorized Git commit, merge and push may run in this session without an Issue or Agent handoff. Review grants no fix, merge or push permission; merge grants no additional push beyond the request. Verify repository, PR, branches and remote; preserve existing changes. Execute clear authorization without asking again; clarify material target/safety ambiguity. Force-push and destructive resets need corresponding authorization. PM mode itself grants none. Report Git/PR results in chat unless recording is separately required.
 

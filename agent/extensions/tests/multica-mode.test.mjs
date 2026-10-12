@@ -9,8 +9,9 @@ import { canonicalPath, cleanText, containsPath, MulticaClient, repoKey, restore
 
 // Resolve the same host-supplied TypeBox as pi, without adding a dependency.
 const agent = fileURLToPath(new URL('../../', import.meta.url));
-const version = readFileSync(join(agent, 'install/current-version'), 'utf8').trim();
-const hostRequire = createRequire(join(agent, 'install/releases', version, 'package.json'));
+const hostInstall = process.env.PI_TEST_HOST_INSTALL || join(agent, 'install');
+const version = readFileSync(join(hostInstall, 'current-version'), 'utf8').trim();
+const hostRequire = createRequire(join(hostInstall, 'releases', version, 'package.json'));
 registerHooks({ resolve(specifier, context, next) {
   return specifier === 'typebox' ? { url: new URL(`file://${hostRequire.resolve('typebox')}`).href, shortCircuit: true } : next(specifier, context);
 } });
@@ -290,7 +291,7 @@ test('first binding queries projects only; snapshots never enter resident contex
   assert.ok(h.calls.some(([,args]) => args[0] === 'issue'));
   assert.equal((await h.before()).systemPromptOptions.sections.multica_mode, before);
   assert.doesNotMatch(before, /测试任务|"snapshot"|--no-start|label create/);
-  assert.ok(Buffer.byteLength(before) < 2200);
+  assert.ok(Buffer.byteLength(before) < 3300);
 });
 
 test('same event replaces the section; off removes it; local state changes are bounded', async () => {
@@ -358,7 +359,7 @@ test('PM injects Git/PR collaboration boundaries without platform work or tool r
 });
 
 test('installed host records only changed sections, including removal', async () => {
-  const { diffSystemPromptSections } = await import(pathToFileURL(join(agent, 'install/releases', version, 'node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js')).href);
+  const { diffSystemPromptSections } = await import(pathToFileURL(join(hostInstall, 'releases', version, 'node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js')).href);
   const h = harness({}, { enabled: true, target }); await h.start();
   const first = (await h.before()).systemPromptOptions.sections;
   assert.deepEqual(diffSystemPromptSections({}, first), first);
@@ -467,4 +468,52 @@ test('follow-up contract rejects removal of preflight status and revision checks
   const mutated = original.replace('Compare identity, workspace/project, assignee, status and revision with the analyzed snapshot.', 'Compare identity, workspace/project and assignee with the analyzed snapshot.');
   assert.notEqual(mutated, original, 'negative fixture must actually remove the preflight checks');
   assert.throws(() => assertFollowUpContract(mutated), { code: 'ERR_ASSERTION', message: /preflight must compare ownership, assignee, status and revision/ });
+});
+
+// Guidance contracts and real extension injection, not model decision tests.
+function assertAppSessionContract(text) {
+  for (const operation of ['App run/install', 'cause investigation', 'error analysis', 'reproduction', 'test requests']) {
+    assert.ok(text.includes(operation), `missing operation: ${operation}`);
+  }
+  assert.match(text, /current-session tools|current PM session|current-session operations/);
+  assert.match(text, /(?:reply with results|replying|unverified items) in chat/);
+  assert.match(text, /(?:Tool use, multi-step analysis (?:or|and) repository inspection)(?: alone)? (?:do not require|do not authorize|does not require) Issue creation\/update, assignment or Agent startup/);
+  assert.match(text, /Only explicit task recording or authorized code implementation enters/);
+  assert.match(text, /Diagnosis\/tests\/install (?:grant no|do not authorize) source edits, fixes, commits, merges, pushes, deployment or (?:Issue )?closure/);
+  assert.match(text, /Confirm payment, elevation, permission changes, sensitive-data actions and destructive operations/);
+}
+
+test('App operations contract reaches actual PM injection and both workflow layers', async () => {
+  const h = harness({}, { enabled: true, target, issue: 'i' }); await h.start();
+  const section = (await h.before()).systemPromptOptions.sections.multica_mode;
+  assertAppSessionContract(section);
+  const root = join(agent, 'skills/issue-workflow');
+  for (const path of ['SKILL.md', 'references/execution.md']) {
+    assertAppSessionContract(readFileSync(join(root, path), 'utf8'));
+  }
+  const execution = readFileSync(join(root, 'references/execution.md'), 'utf8');
+  assert.match(execution, /“仅分析，不修改代码” remains diagnosis-only/);
+  assert.match(execution, /issue identifier or PM issue focus does not itself request a task write or follow-up status transition/);
+  assert.match(execution, /source rewrites, destructive fixtures or deployment hooks need their own authorization/);
+  assert.match(section, /report source defects and wait for repair authorization/);
+  assert.match(section, /clear ordinary authorization needs no repeat confirmation/);
+  assert.match(section, /Clarify only material target\/platform\/environment ambiguity/);
+  assert.match(section, /Code implementation goes to the issue owner/);
+  assert.equal(h.calls.length, 0, 'injection with focused issue must not query or mutate platform');
+  assert.equal(h.events.has('tool_call'), false, 'no blanket tool prohibition');
+});
+
+test('App contracts reject handoff, automatic repair and missing confirmation regressions', async () => {
+  const h = harness({}, { enabled: true, target }); await h.start();
+  const original = (await h.before()).systemPromptOptions.sections.multica_mode;
+  for (const [before, after] of [
+    ['do not require Issue creation/update, assignment or Agent startup', 'require Issue creation/update, assignment or Agent startup'],
+    ['Only explicit task recording or authorized code implementation enters', 'Any operation needing tools enters'],
+    ['Diagnosis/tests/install grant no source edits, fixes, commits, merges, pushes, deployment or closure', 'Failed tests authorize source edits and fixes'],
+    ['Confirm payment, elevation, permission changes, sensitive-data actions and destructive operations', 'Installation authorizes all side effects'],
+  ]) {
+    const mutated = original.replace(before, after);
+    assert.notEqual(mutated, original, `negative fixture must change: ${before}`);
+    assert.throws(() => assertAppSessionContract(mutated), { code: 'ERR_ASSERTION' });
+  }
 });
