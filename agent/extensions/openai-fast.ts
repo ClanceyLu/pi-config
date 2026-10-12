@@ -5,8 +5,8 @@ const TARGET_PROVIDER = "openai-codex";
 const TARGET_MODEL = "gpt-5.6-sol";
 
 export default function (pi: ExtensionAPI) {
-	// Preserve the extension's previous behavior: Fast mode starts enabled.
-	let enabled = true;
+	// Priority may consume additional quota. Opt in explicitly for each session.
+	let enabled = false;
 
 	const isSupportedModel = (ctx: ExtensionContext) =>
 		ctx.model?.provider === TARGET_PROVIDER && ctx.model.id === TARGET_MODEL;
@@ -17,7 +17,10 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.setStatus(STATUS_ID, enabled && isSupportedModel(ctx) ? "fast" : undefined);
 	};
 
-	pi.on("session_start", (_event, ctx) => updateStatus(ctx));
+	pi.on("session_start", (_event, ctx) => {
+		enabled = false;
+		updateStatus(ctx);
+	});
 	pi.on("model_select", (_event, ctx) => updateStatus(ctx));
 
 	pi.registerCommand("fast", {
@@ -31,6 +34,11 @@ export default function (pi: ExtensionAPI) {
 		},
 		handler: async (args, ctx) => {
 			const action = args.trim().toLowerCase();
+
+			if ((action === "on" || action === "") && !isSupportedModel(ctx)) {
+				ctx.ui.notify(`Priority mode is not configured for this model; supported: ${TARGET_PROVIDER}/${TARGET_MODEL}`, "warning");
+				return;
+			}
 
 			if (action === "on") enabled = true;
 			else if (action === "off") enabled = false;
