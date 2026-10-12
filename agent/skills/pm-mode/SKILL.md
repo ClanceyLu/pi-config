@@ -1,5 +1,5 @@
 ---
-name: multica-mode
+name: pm-mode
 description: "PM discussion, App operations and diagnosis in-session; authorized Git/PR collaboration and explicit Issue operations."
 ---
 

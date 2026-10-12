@@ -24,6 +24,8 @@ Keep execution control out of issue bodies: describe the problem, goal, scope an
 
 Write issue bodies directly in the requester's voice: state the problem, goal and constraints, not a retelling of their instructions. For result comments, lead with the outcome and include only relevant changes, actual evidence, gaps and next action. Use references/authoring.md for body wording and references/follow-up.md for delivery wording; templates are optional aids, not mandatory report fields.
 
+Report validation, acceptance and handoff evidence in chat or an authorized Issue comment. Do not create one-off report files in the repository or Skill references (for example `validation-YYYY-MM-DD.md`, acceptance reports or task diaries), or add links to such files, unless the user explicitly requests file output. Implementation or validation authorization alone does not authorize report files; keep required tests and product documentation.
+
 When writing related Multica issues through CLI/API, use `[任务编号](mention://issue/<真实 UUID>)` after verifying the identifier, UUID and target ownership; a plain-text number is not enough. See references/multica.md for reference versus relationship and execution semantics.
 
 For creation, search existing issues first, clarify undecided content and target, and preserve the user's label choices. New labels require separate explicit authorization. For any write, verify current ownership of the target workspace/project/issue and actual state before and after; ambiguous results require a read before retrying. Do not infer service/profile or workspace from a directory. Assignment-only is not permission to start a Run.

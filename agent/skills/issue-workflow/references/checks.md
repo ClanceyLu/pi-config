@@ -90,7 +90,7 @@ Run these as controlled conversational/CLI fixtures without live mutations unles
 | Wrong workspace, skill-resource label, or conflicting metadata | Stop before binding; no credential switching or auto-correction |
 | Issue create response ambiguous or new label exists but issue creation fails | Resolve issue identity by reads; report partial state; no blind issue/label recreation |
 
-Live-write acceptance and simulated traces must remain separately marked. See `validation-2026-10-10.md` for the initial environment, read-only evidence and remaining approval gates.
+Live-write acceptance and simulated traces must remain separately marked.
 
 ## Conditional loading and feedback
 
@@ -128,7 +128,7 @@ Retain ordinary-discussion no-read, assignment-only no-start, direct-start autho
 
 ## Body versus execution control regression
 
-Run `node --test agent/extensions/tests/multica-mode.test.mjs` for static contracts and the injected PM prompt fixture. These checks inspect maintained guidance/examples, not real model-generated bodies or platform startup behavior.
+The previous static-contract and injected PM prompt tests were removed with `agent/extensions/tests/`. Historical results do not validate the current code, real model-generated bodies or platform startup behavior.
 
 For behavioral evaluation, give a model the routed Skill and each confirmed request below in an isolated, non-writing session. Capture the actual proposed body and operation plan separately; compare them to the observations. No live test resources are required.
 
@@ -187,7 +187,7 @@ Evaluate these against execution.md and both Skill entrypoints. A static/manual 
 
 ## App operations and diagnosis regression
 
-Run `node --test agent/extensions/tests/multica-mode.test.mjs`. In an isolated checkout without pi installed, set `PI_TEST_HOST_INSTALL` to the existing pi `agent/install` directory; only host dependencies come from there, while tested extension and Skills come from the checkout. Static contracts and the extension injection harness do not prove model choices or platform end-to-end behavior. Run the following cases separately in a controlled model session when that evidence is required; do not claim this scenario table as an executed test.
+The previous extension injection harness was removed with `agent/extensions/tests/`. Its historical results do not prove current model choices or platform end-to-end behavior. Run the following cases separately in a controlled model session when that evidence is required; do not claim this scenario table as an executed test.
 
 | Request / observation | Expected behavior |
 | --- | --- |
