@@ -314,6 +314,7 @@ export class ReasoningModeRuntime {
 			}
 		});
 		this.pi.on("before_agent_start", async (event, ctx) => {
+			delete event.systemPromptOptions.sections.reasoning_workflow;
 			if (this.state.mode !== "reasoning") return;
 			if (this.state.activeSkill === "plan") {
 				this.planSubmittedThisRun = false;
@@ -321,7 +322,7 @@ export class ReasoningModeRuntime {
 			}
 			const skill = await this.skillPrompt(event.systemPromptOptions, ctx);
 			const additions = [reasoningModePrompt(this.state.activeSkill), skill.content, skill.failure].filter(Boolean).join("\n\n");
-			return { systemPrompt: `${event.systemPrompt}\n\n${additions}` };
+			event.systemPromptOptions.sections.reasoning_workflow = additions;
 		});
 		this.pi.on("message_end", (event, ctx) => {
 			const planToolRequired = ctx.mode === "tui" && this.pi.getActiveTools().includes(PLAN_SUBMIT_TOOL_NAME);

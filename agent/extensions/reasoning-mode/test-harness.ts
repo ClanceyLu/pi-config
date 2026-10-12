@@ -239,8 +239,10 @@ export async function harness(
 			});
 			return result;
 		},
-		beforeAgent: async () => store.handlers.get("before_agent_start")?.({
+		beforeAgent: async () => {
+			const event = {
 			prompt: "task", systemPrompt: "BASE", systemPromptOptions: {
+				sections: {} as Record<string, string>,
 				cwd: root,
 				skills: (["explore", "plan"] as const)
 					.filter((name) => store.skillEnabled[name])
@@ -253,7 +255,12 @@ export async function harness(
 						disableModelInvocation: true,
 					})),
 			},
-		}, ctx),
+			};
+			const result = await store.handlers.get("before_agent_start")?.(event, ctx);
+			assert.equal(result?.systemPrompt, undefined, "reasoning must not override the complete system prompt");
+			if (Object.keys(event.systemPromptOptions.sections).length === 0) return undefined;
+			return { systemPrompt: [event.systemPrompt, ...Object.values(event.systemPromptOptions.sections)].join("\n\n") };
+		},
 		toolCall: async (toolName: string, input: Record<string, unknown>) => store.handlers.get("tool_call")?.({ toolName, input }, ctx),
 		command: async (name: "reasoning" | "plan", args = "") => {
 			const command = store.commands.get(name);
