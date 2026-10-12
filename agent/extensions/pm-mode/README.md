@@ -41,6 +41,12 @@
 
 运行 `node --experimental-test-module-mocks --test agent/extensions/pm-mode/boundary.test.ts`。状态边界 harness 执行真实扩展：默认关闭、缓存聚焦、启用/关闭、启动 flag、会话恢复/分叉/树切换、固定提示与规则缺失回退；静态正反例校验两个 Skill 和执行参考。使用模拟 CLI/TypeBox，无真实模型、TUI 或平台写入验证。
 
+## 当前契约检查
+
+运行 `node --experimental-test-module-mocks --test agent/extensions/pm-mode/index.test.ts`（Node.js 24）。Harness 执行真实扩展的事件处理器与磁盘 Skill，覆盖普通/强制提示注入、关闭、旧会话恢复、缺失规则回退及 Draft PR 授权边界；仅模拟 schema 构造和文件读取故障，不访问平台。这是提示契约验证，不证明模型决策或真实 PR/平台端到端行为。
+
+代码实施的分支/worktree/Draft PR 生命周期见 `agent/skills/issue-workflow/references/execution.md`；交付复用原 PR，验收、检查及合并授权满足后才通过该 PR 合并，确认远端结果后按权限关闭。
+
 ## 历史验证
 
 以下记录对应重命名前的测试；`agent/extensions/tests/` 已删除，当前没有可运行的该测试文件。

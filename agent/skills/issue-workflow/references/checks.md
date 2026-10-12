@@ -193,7 +193,7 @@ Evaluate these against execution.md and both Skill entrypoints. A static/manual 
 | First implementation; verified unused mapping | Create one Issue branch/worktree from verified base; record Issue/repository/path/branch/base |
 | Retry with owned dirty worktree | Verify and reuse same mapping; retain changes, no new per-Run branch |
 | Another Issue owns path; missing mapping; active writer | Stop affected edits, preserve files, resolve ownership; no forced checkout |
-| Accepted exact revision, checks pass, verified primary branch called trunk | Authorized merge to trunk, verify integrated changes/checks, then permitted close/readback; no hard-coded branch |
+| Accepted exact revision, checks pass, verified primary branch called trunk | Authorized merge through the original PR to trunk, verify remote integrated changes/checks, then permitted close/readback; no hard-coded branch |
 | Run completes or tests pass without user acceptance | Deliver for review; no merge or closure |
 | Acceptance exists but commit/merge/closure authorization is absent | Request only missing permission; no inferred push |
 | Source changed after acceptance / target default ambiguous | Reassess acceptance / resolve target; no close |
@@ -205,7 +205,7 @@ Evaluate these against execution.md and both Skill entrypoints. A static/manual 
 
 ## App operations and diagnosis regression
 
-The previous extension injection harness was removed with `agent/extensions/tests/`. Its historical results do not prove current model choices or platform end-to-end behavior. Run the following cases separately in a controlled model session when that evidence is required; do not claim this scenario table as an executed test.
+The previous extension injection harness was removed with `agent/extensions/tests/`. The current focused harness is documented below. Neither its results nor historical results prove model choices or platform end-to-end behavior. Run the following cases separately in a controlled model session when that evidence is required; do not claim this scenario table as an executed test.
 
 | Request / observation | Expected behavior |
 | --- | --- |
@@ -222,3 +222,24 @@ The previous extension injection harness was removed with `agent/extensions/test
 | “修复刚才发现的源码问题” | Authorized implementation route with isolated worktree and existing trigger/acceptance/Git gates |
 
 Reject regressions that route these operations to an Issue because tools are needed, allow automatic source repair on failure, or remove sensitive/destructive action confirmation. Check the actual resident prompt as well as entrypoints and execution reference. Review/commit/merge/push retain their separate authorization rules.
+
+## Draft PR lifecycle contracts
+
+Check both Skill entrypoints, execution/delivery references and the actual pm-mode before_agent_start injection, including forced system prompts and missing-Skill fallback. Prompt contracts verify guidance availability, not model compliance or hosting behavior.
+
+| Input | Required outcome |
+| --- | --- |
+| First valid non-empty task commit; verified mapping/remote | Scoped local commit, ordinary task-branch push, one Draft PR to verified primary branch |
+| Empty task branch or baseline-only fast-forward | No empty commit or placeholder PR |
+| Retry with dirty mapped worktree and existing open Draft PR | Preserve work, reuse branch/worktree/PR |
+| Multiple PRs, mismatched head/base, closed/merged or unexpectedly ready PR | Resolve discrepancy; no duplicate creation or implicit lifecycle change |
+| Local base includes unpublished unrelated commits | Block publication unless user explicitly authorized that baseline; disclose baseline versus increment |
+| Explicit no-push, stricter runtime or denied permissions | Preserve state and report blocker; no broadened authorization |
+| Ordinary push rejected | No force-push, primary-branch push or history rewrite |
+| Push/create timeout | Read remote head and actual PR state before retry |
+| Delivered Draft PR without user acceptance | No merge or closure |
+| Accepted revision with required checks and merge authorization | Merge through original verified PR |
+| Local merge only, unknown target, conflict or remote result unconfirmed | No closure; report missing gate |
+| PR URL recorded but platform link not verified | Do not claim formal association or invent a linking command |
+
+Run the resident prompt harness with `node --experimental-test-module-mocks --test agent/extensions/pm-mode/index.test.ts`. Separately report any temporary Git experiment and real hosting checks; neither proves full platform/model end-to-end behavior.
