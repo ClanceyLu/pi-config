@@ -4,7 +4,7 @@ Read the current issue body, scan comment threads and expand relevant ones using
 
 Git/PR collaboration results stay in chat unless recording is separately required; this Issue delivery workflow does not force an Issue write for a PR review, commit, merge or push.
 
-For authorized code implementation by the owner, reply to or update the issue with the problem, required changes and next step; use execution.md for the write and direct-start boundaries. A general fix request does not authorize rerun. Read-only inspection and review-only feedback remain non-implementation requests. The completion transition is a status operation, not permission to take over implementation.
+While PM is enabled, for authorized code implementation by the owner, reply to or update the issue with the problem, required changes and next step; use execution.md for the write and direct-start boundaries. A general fix request does not authorize rerun. Read-only inspection and review-only feedback remain non-implementation requests. The completion transition is a status operation, not permission to take over implementation.
 
 ## Completed explicit follow-up → todo
 
