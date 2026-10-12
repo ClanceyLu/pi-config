@@ -35,6 +35,12 @@
 - 扩展本身仅远程读取。模型根据用户授权，通过 Multica CLI 创建/更新/分派任务；模式不会用 shell 字符串匹配冒充完整的权限控制。分派与启动分开授权：仅分派使用 CLI 支持的 `assign/update --no-start`（`create` 不支持此参数，新任务先无负责人创建，再 `assign --no-start`）；代码实施需要负责人处理时默认回复或更新 Issue，说明问题、改动要求和下一步；一般“执行”“修复”“写入 Skill”不授权直接启动 Run。只有明确要求直接启动或重启 Run 才调用 rerun 等操作；回复/更新可能已触发执行，不叠加 rerun、提及或状态变更重复启动。不确定时先询问并等待，不把 review、测试或预览当作修复授权。关键写入、执行及新标签创建遵循确认规则。
 - 人类交互控制会话的 CLI 读取使用系统临时目录作为工作目录，以免与同项目 Agent Run 的 `.multica` 标记冲突；不删除标记、不读取任务令牌。git 仓库匹配仍在项目目录执行。托管任务保持任务目录和注入的凭据。
 
+## 当前契约检查
+
+运行 `node --experimental-test-module-mocks --test agent/extensions/pm-mode/index.test.ts`（Node.js 24）。Harness 执行真实扩展的事件处理器与磁盘 Skill，覆盖普通/强制提示注入、关闭、旧会话恢复、缺失规则回退及 Draft PR 授权边界；仅模拟 schema 构造和文件读取故障，不访问平台。这是提示契约验证，不证明模型决策或真实 PR/平台端到端行为。
+
+代码实施的分支/worktree/Draft PR 生命周期见 `agent/skills/issue-workflow/references/execution.md`；交付复用原 PR，验收、检查及合并授权满足后才通过该 PR 合并，确认远端结果后按权限关闭。
+
 ## 历史验证
 
 以下记录对应重命名前的测试；`agent/extensions/tests/` 已删除，当前没有可运行的该测试文件。
