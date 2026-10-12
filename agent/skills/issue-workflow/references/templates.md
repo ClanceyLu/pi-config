@@ -23,7 +23,7 @@ Delivery — after:
 Issue feedback — example:
 > authoring.md 无条件引导读取模板和测试参考，普通创建任务可能加载无关内容。删除这些指引或补齐入口的加载条件，并补充二级引用契约检查；保留标签授权和目标核验。修复已授权，由当前负责人实施并提供实际检查结果，完成后交审核。
 
-Keep coordinating-session inspection logs and checklists in chat. This example assumes the fix is authorized: deliver it through an issue reply/update, without adding rerun, agent mentions or status changes to trigger it again. Feedback alone is not an implementation request. Only an explicit request to directly start/restart a Run permits a direct start operation.
+Keep coordinating-session inspection logs and checklists in chat. This example assumes PM is enabled and the fix is authorized: deliver it through an issue reply/update, without adding rerun, agent mentions or status changes to trigger it again. Feedback alone is not an implementation request. Only an explicit request to directly start/restart a Run permits a direct start operation.
 
 ## Creation arrangements (conversation, not issue body)
 
@@ -143,8 +143,8 @@ Deliverable: recommendation, tradeoffs, fit conditions, sources, open questions.
 Current result: what is done / not done
 Target: service/profile, workspace, project, issue, repository, branch
 Effective decisions: scope, constraints, links
-Code: verified Issue/repository/branch/worktree mapping, base commit, commit/PR or uncommitted changes and conflict risk
-Acceptance/integration (when relevant): user acceptance of revision, verified primary branch, validation and merge result; missing closure gates
+Code: verified Issue/repository/branch/worktree mapping, development base and remote target commits, source commit, original Draft PR URL/head/base (or blocker), baseline content versus task increment, uncommitted changes and conflict risk
+Acceptance/integration (when relevant): user acceptance of revision, verified primary branch, validation and same-PR remote merge result; missing closure gates
 Validation: environment, commands, results; untested items and why
 Blocker: missing thing, owner, release condition
 Next: first action for the next session; whether issue reply/update, direct Run start/restart, or push is separately authorized
@@ -186,7 +186,7 @@ Assignee/status and preserved user choices:
 - “把已确认的这两个文件提交到当前分支，不推送”：核验仓库、分支及暂存/未暂存差异，仅提交授权内容；保留其他改动，不重复要求许可，不创建 Issue。
 - “合并指定 PR”：核验 PR、目标分支和已授权的合并方式；在当前会话完成范围内操作，不额外推送无关本地分支。目标存在歧义时先澄清。
 - “将当前分支推送到已确认的 origin 分支”：核验远端和目标后执行普通推送；如需强推，先取得对应授权，不因 PM 模式拒绝或分派。
-- “修复 review 发现的问题”：代码实施交 Issue 负责人；不额外直接启动 Run，除非另有明确启动授权。
+- “修复 review 发现的问题”：PM 开启时，代码实施交 Issue 负责人；关闭时按授权在当前会话实施；不额外直接启动 Run，除非另有明确启动授权。
 
 These illustrate decisions, not performed Git operations. Report actual results in chat unless a separate recording requirement applies.
 
