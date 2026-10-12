@@ -27,14 +27,24 @@ Do not automatically add “不启动执行”, “仅创建并分配任务”, 
 
 Use the platform's verified status configuration to represent planning and execution readiness; follow execution.md for authorization, trigger suppression and readback. If the intended state cannot be established safely, resolve that operational uncertainty before the affected write; do not compensate with prose in the issue. Do not rewrite historical issues or comments as part of adopting this rule.
 
-## Split only when useful
+## Automatically separate distinct functional points
+
+Before drafting, creating or appending requirements, automatically compare each requested feature or BUG with the existing Issue's goal, user-visible behavior and acceptance criteria. The current Issue focus, shared files, common module or the phrase “再改一个 BUG” does not establish that they are one functional point.
+
+- Same functional point: implementation steps, frontend/backend/tests, missing behavior or acceptance failures needed to complete the original goal stay in that Issue, normally as a checklist. A regression directly caused by the current task stays there when restoring the original acceptance behavior.
+- Different functional points: different goals or defects that can be delivered and accepted independently become separate Issues, each with its own scope and acceptance. Two distinct points require two Issues; do not append the second to the first as scope expansion. Shared code, the same screen or a common suspected root cause alone does not justify combining them.
+- Assess the boundary automatically and briefly explain the split; do not ask the user to classify clear cases. Ask only when missing facts materially affect the boundary. Explicit instructions to keep one tracking Issue may use independently scoped sub-Issues under that parent, rather than silently combining unrelated implementation scope.
+
+When creation is authorized, split the confirmed request accordingly without an extra confirmation just for the split; retain target, duplicate-search, label and content checks. When only editing/fixing an existing Issue is authorized, do not append an independent point or infer permission for platform creation: propose the separate Issue and request only the missing creation authorization. Historical Issue migration, assignment and execution remain separately authorized operations.
+
+## Choose the smallest useful structure
 
 - Project: shared context and resources for multiple goals; do not create one for a small fix.
 - Parent issue: an integrated outcome with an owner responsible for overall acceptance.
 - Sub-issue: independently owned, discussed, blocked, delivered, or reviewed work.
 - Checklist: steps within one owner and one delivery; default for small tasks.
 
-Prefer independently verifiable outcomes over mechanical frontend/backend/test partitions. Each sub-issue needs its own context and acceptance plus shared constraints. Write what prerequisite delivery must be accepted before work starts. Parent/child structure is not itself a dependency graph.
+Use the functional-point assessment above, not mechanical frontend/backend/test partitions. Each sub-issue needs its own context and acceptance plus shared constraints. Write what prerequisite delivery must be accepted before work starts. Parent/child structure is not itself a dependency graph.
 
 Parallelize only when outputs, working directories, and shared resources do not conflict. Different issues or agents do not make shared-file edits safe. A parent is not done merely because all children are closed. For a single implementer, prefer one active implementation task unless parallel work has clear value.
 

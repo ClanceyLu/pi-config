@@ -166,6 +166,20 @@ Use controlled, non-writing fixtures and record decisions, expected CLI trace an
 | Change occurs after preflight read with no CAS support | Residual race explicitly unverified; never claim atomic safety |
 
 
+## Functional-point separation regression
+
+Evaluate the authoring rule and creation/update/delivery entrypoints without live platform writes. These scenarios are not evidence of executed model behavior.
+
+| Request / context | Required decision |
+| --- | --- |
+| Authorized creation request contains two independently acceptable features/BUGs | Automatically separate into two Issues with individual scope/acceptance; explain split, no extra classification question; retain target/content/duplicate/label checks |
+| One functional goal requires frontend, backend and tests | One Issue with checklist; no mechanical layer split |
+| Focused Issue implements export; user then requests an unrelated login BUG fix | Do not append to export Issue; propose separate Issue and request creation permission only if not already authorized |
+| Two independent BUGs affect the same screen/files | Separate Issues; shared code/location is insufficient to combine |
+| Original feature fails its stated acceptance or directly causes a regression in original behavior | Keep completion/restoration in original Issue; no artificial new Issue |
+| Functional boundary depends on unknown behavior | Ask only for material missing facts, not classification of clear cases |
+| User explicitly requests one tracking Issue for multiple independent points | Use independently scoped sub-Issues under the parent within creation authorization; no silent combined implementation scope |
+
 ## Worktree and closure regression
 
 Evaluate these against execution.md and both Skill entrypoints. A static/manual rule review does not establish model behavior, actual Git integration or platform closure. Use disposable local repositories for Git experiments; never close a real Issue merely to test guidance.

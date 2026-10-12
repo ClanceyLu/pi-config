@@ -9,13 +9,15 @@ Follow the requested operation only. Drafting does not authorize platform writes
 
 Explicit App run/install, cause investigation, error analysis, reproduction and test requests stay in the current PM session, using its tools and replying in chat. Tool use, multi-step analysis and repository inspection alone do not authorize Issue creation/update, assignment or Agent startup. Only explicit task recording or authorized code implementation enters the corresponding Issue route. Diagnosis/tests/install do not authorize source edits, fixes, commits, merges, pushes, deployment or closure; report discovered defects and await repair authorization. Confirm payment, elevation, permission changes, sensitive-data actions and destructive operations; do not repeat confirmation for clear ordinary authorization. Clarify only material target/platform/environment ambiguity. See references/execution.md for operational boundaries when needed.
 
+Automatically assess functional boundaries before drafting, creating or appending feature/BUG requirements. Distinct independently deliverable and acceptable points require separate Issues, not expansion of the focused Issue; steps and acceptance fixes for one point stay together. Read references/authoring.md for this assessment on creation and scope-changing updates. When creation is already authorized, apply the split without asking the user to classify clear cases; otherwise request only missing creation permission.
+
 Read only the route needed, with paths relative to this Skill:
 
 | Explicit request | Required references |
 | --- | --- |
 | Draft/review/split an issue | references/authoring.md; references/templates.md only for a requested template/handoff |
 | Create issue | references/authoring.md, references/multica.md, references/execution.md, references/labels.md |
-| Update issue | references/multica.md, references/execution.md; references/authoring.md for body changes |
+| Update issue | references/multica.md, references/execution.md; references/authoring.md for body or requirement/scope changes |
 | Follow up/read issue | references/multica.md, references/follow-up.md |
 | Accept/merge/close | references/execution.md, references/follow-up.md; references/multica.md for Issue writes |
 | Assign/execute/stop | references/multica.md, references/execution.md; references/follow-up.md when delivering results |

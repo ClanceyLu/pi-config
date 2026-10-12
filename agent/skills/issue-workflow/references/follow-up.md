@@ -18,7 +18,7 @@ Apply only to the target of the user's explicit follow-up request, not every rel
 
 ## Feedback and delivery
 
-The body holds current requirements; comments hold decisions, changes, evidence, and handoffs. Changes to scope or acceptance need a reason and an impact statement. Record blockers with the missing condition, who can resolve it, and what allows continuation.
+The body holds current requirements; comments hold decisions, changes, evidence, and handoffs. Before adding a feature/BUG to the current Issue, assess its functional boundary under authoring.md: original-goal steps and acceptance fixes stay; independently deliverable/acceptable points require separate Issues, not scope expansion merely because this Issue is focused. Apply clear boundaries automatically, while preserving separate creation authorization. Changes within the same functional point to scope or acceptance need a reason and an impact statement. Record blockers with the missing condition, who can resolve it, and what allows continuation.
 
 Issue feedback states the problem, impact, required fix and next action directly. Do not use internal review headings such as “Review 结论” or “复核结论”, or retell user instructions. Keep the coordinating session’s inspection process, checklists and execution results in chat; put only implementation facts, constraints and actionable problems on the issue. The assigned implementer still delivers actual validation evidence, unfinished work and material risks.
 
