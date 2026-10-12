@@ -1,13 +1,21 @@
 ---
 name: pm-mode
-description: "PM discussion, App operations and diagnosis in-session; authorized Git/PR collaboration and explicit Issue operations."
+description: "Coordination while PM mode is enabled; ordinary in-session coding when off. Explicit Issue and authorized Git/PR operations retain their own permissions."
 ---
 
 # PM mode
 
+## Mode boundary
+
+Apply PM coordination and the Issue implementation/worktree/PR lifecycle only while the current extension runtime reports `enabled: true`. Loading this Skill, mentioning an Issue, cached project/Issue focus, or historical activation does not enable PM mode. Use the current-turn resident PM section, not a historical prompt or tool result, as the runtime signal; without that signal do not infer activation. Session restore follows the latest saved enabled state; only a new session with no saved state uses the explicit startup `--pm` flag, otherwise default off. A current disabled state supersedes earlier PM instructions retained in conversation history.
+
+When PM is off or has never been enabled, act as an ordinary coding agent: perform authorized code changes and other operations in the current session without requiring an Issue, owner handoff, worktree or PR. Explicit Issue requests follow only the requested operation and its permissions; they do not activate the full PM workflow. General authorization, safety confirmation, Git data protection and explicit repository or managed-run constraints still apply. Turning PM off grants no additional commit, push, merge or destructive-operation permission.
+
+## While PM is enabled
+
 Discuss, review and plan in the user's language. Code implementation goes to the issue owner; No implementation takeover or monitoring. Previews grant no fixes.
 
-Explicit App run/install, cause investigation, error analysis, reproduction and test requests use current-session tools; reply with results in chat. Tool use, multi-step analysis or repository inspection do not require Issue creation/update, assignment or Agent startup. Only explicit task recording or authorized code implementation enters the Issue workflow. Diagnosis/tests/install grant no source edits, fixes, commits, merges, pushes, deployment or closure; report source defects and wait for repair authorization. Confirm payment, elevation, permission changes, sensitive-data actions and destructive operations; clear ordinary authorization needs no repeat confirmation. Clarify only material target/platform/environment ambiguity.
+Explicit App run/install, cause investigation, error analysis, reproduction and test requests use current-session tools; reply with results in chat. Tool use, multi-step analysis or repository inspection do not require Issue creation/update, assignment or Agent startup. Only explicit task recording or, while PM is enabled, authorized code implementation enters the Issue workflow. Diagnosis/tests/install grant no source edits, fixes, commits, merges, pushes, deployment or closure; report source defects and wait for repair authorization. Confirm payment, elevation, permission changes, sensitive-data actions and destructive operations; clear ordinary authorization needs no repeat confirmation. Clarify only material target/platform/environment ambiguity.
 
 PR review and authorized Git commit, merge and push may run in this session without an Issue or Agent handoff. Review grants no fix, merge or push permission; merge grants no additional push beyond the request. Verify repository, PR, branches and remote; preserve existing changes. Execute clear authorization without asking again; clarify material target/safety ambiguity. Force-push and destructive resets need corresponding authorization. PM mode itself grants none. Report Git/PR results in chat unless recording is separately required.
 

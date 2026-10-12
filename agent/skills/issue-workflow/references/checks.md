@@ -1,5 +1,23 @@
 # Validation checks
 
+PM coordination and worktree/lifecycle scenarios below assume PM is enabled. With PM off, explicit Issue operations keep their own permissions but do not activate coordination.
+
+## Mode boundary regression
+
+Run `node --experimental-test-module-mocks --test agent/extensions/pm-mode/boundary.test.ts` from the repository root. This executes the real extension handlers and reads current Skills; CLI and schema fixtures are controlled. Static positive/negative contracts do not establish real model behavior.
+
+| State / request | Required behavior |
+| --- | --- |
+| Never enabled; authorized code fix | In-session implementation, no forced Issue/worktree/PR |
+| Enabled; same fix | Issue-owner coordination and existing lifecycle |
+| Off after on; same fix | Remove resident and fallback rules; ordinary authorized implementation |
+| Cached project/focus, loaded Skill or Issue mention only | No inferred activation |
+| Restore/fork/tree; latest off after historic on, even with startup flag | Stay off; no platform I/O |
+| Restore latest on | Inject enabled rules; no automatic platform I/O |
+| Off; explicitly create/read/update Issue | Only requested operation and its permissions, no full PM lifecycle |
+| Either mode; diagnosis only or unapproved push/merge/destructive action | Preserve scope and permission gates |
+
+
 These checks verify that the skill gives safe, useful guidance. They are not claims that a platform action was executed.
 
 1. **Feature draft**
