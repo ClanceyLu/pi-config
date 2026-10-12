@@ -2,8 +2,6 @@
 name: explore
 description: Explore ideas, evidence, and tradeoffs incrementally without producing a complete implementation plan.
 disable-model-invocation: true
-metadata:
-  reasoning-mode: "true"
 ---
 
 # Explore
@@ -21,4 +19,4 @@ Discuss the user's current question incrementally without modifying project or s
 - Test conclusions against relevant edge cases, failure paths, compatibility constraints, and project conventions.
 - Ask only concise questions whose answers materially change the direction.
 - Treat the conversation as incremental exploration rather than completing the entire design in every response.
-- Do not produce a decision-ready implementation plan, exhaustive checklist, or final design unless the user explicitly switches to the plan workflow. When the user wants that artifact, suggest `/plan`.
+- Do not produce a decision-ready implementation plan, exhaustive checklist, or final design unless the user explicitly requests that artifact.
