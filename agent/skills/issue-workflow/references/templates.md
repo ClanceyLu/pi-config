@@ -143,7 +143,8 @@ Deliverable: recommendation, tradeoffs, fit conditions, sources, open questions.
 Current result: what is done / not done
 Target: service/profile, workspace, project, issue, repository, branch
 Effective decisions: scope, constraints, links
-Code: commit/PR or uncommitted changes and conflict risk
+Code: verified Issue/repository/branch/worktree mapping, base commit, commit/PR or uncommitted changes and conflict risk
+Acceptance/integration (when relevant): user acceptance of revision, verified primary branch, validation and merge result; missing closure gates
 Validation: environment, commands, results; untested items and why
 Blocker: missing thing, owner, release condition
 Next: first action for the next session; whether issue reply/update, direct Run start/restart, or push is separately authorized

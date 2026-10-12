@@ -164,3 +164,23 @@ Use controlled, non-writing fixtures and record decisions, expected CLI trace an
 | Write errors; readback still blocked or read fails | One attempt; report failed/unconfirmed transition, no retry |
 | Write succeeds; readback is in_progress | Report actual state/Run evidence; do not force todo again |
 | Change occurs after preflight read with no CAS support | Residual race explicitly unverified; never claim atomic safety |
+
+
+## Worktree and closure regression
+
+Evaluate these against execution.md and both Skill entrypoints. A static/manual rule review does not establish model behavior, actual Git integration or platform closure. Use disposable local repositories for Git experiments; never close a real Issue merely to test guidance.
+
+| Fixture | Required decision/evidence |
+| --- | --- |
+| First implementation; verified unused mapping | Create one Issue branch/worktree from verified base; record Issue/repository/path/branch/base |
+| Retry with owned dirty worktree | Verify and reuse same mapping; retain changes, no new per-Run branch |
+| Another Issue owns path; missing mapping; active writer | Stop affected edits, preserve files, resolve ownership; no forced checkout |
+| Accepted exact revision, checks pass, verified primary branch called trunk | Authorized merge to trunk, verify integrated changes/checks, then permitted close/readback; no hard-coded branch |
+| Run completes or tests pass without user acceptance | Deliver for review; no merge or closure |
+| Acceptance exists but commit/merge/closure authorization is absent | Request only missing permission; no inferred push |
+| Source changed after acceptance / target default ambiguous | Reassess acceptance / resolve target; no close |
+| Merge conflict or source/integrated validation fails | Preserve state, report blocker/next action; no close |
+| Merge command succeeds but target inclusion is unconfirmed | Verify actual target and changes; no close until confirmed |
+| Squash merge / remote integration required but only local merge exists | Check equivalent changes / verified remote result; no ancestry-only or local-only claim |
+| Merge confirmed, closure response times out | Read Issue state; no blind close retry or repeated merge |
+| Runtime reserves done for humans | Provide confirmed merge evidence to human; do not write done |
