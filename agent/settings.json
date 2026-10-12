@@ -9,7 +9,6 @@
     "+tool_search"
   ],
   "packages": [
-    "npm:@juicesharp/rpiv-todo",
     "npm:@dietrichgebert/ponytail"
   ],
   "editorPaddingX": 1,
