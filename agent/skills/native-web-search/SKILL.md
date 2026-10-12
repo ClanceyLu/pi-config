@@ -5,7 +5,7 @@ description: "Trigger native web search. Use when you need quick internet resear
 
 # Native Web Search
 
-Use this skill to run a **fast model with native web search enabled** and get a concise research summary with explicit full URLs.
+Use this skill to run native web search and get a concise research summary with explicit full URLs. It uses the saved Pi default model unless `--model` is supplied; choose a supported smaller model explicitly when speed or cost matters.
 
 ## Script
 
@@ -43,7 +43,9 @@ The script instructs the model to:
 
 ## Notes
 
-- No extra npm install is required.
-- If module resolution fails, set `PI_AI_MODULE_PATH` to `@earendil-works/pi-ai`'s `dist/index.js` path.
-- If OAuth helper resolution fails, set `PI_AI_OAUTH_MODULE_PATH` to `@earendil-works/pi-ai`'s `dist/oauth.js` path.
-- For OAuth providers, the script can fall back to a still-valid cached `access` token from `~/.pi/agent/auth.json`.
+- Requires Node.js and Pi 0.87.1 or newer on PATH; no extra npm install is required.
+- Set `PI_EXECUTABLE` to an executable path if `pi` is not on PATH.
+- Authentication is delegated to `pi auth check --json --credentials`, supporting API keys and OAuth; secret output is captured privately. Do not run credential-printing commands directly in conversation-visible tools.
+- Pi handles credential refresh and environment-variable interpolation. The script never reads or writes `auth.json` itself.
+- Only the first-party `openai-codex` and `anthropic` search endpoints are supported, not arbitrary compatible proxies.
+- When selecting a provider different from the saved default, also supply `--model <id>`. Unsupported defaults fail explicitly instead of silently switching providers or using retired model IDs.
