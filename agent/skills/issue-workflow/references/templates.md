@@ -188,3 +188,15 @@ Assignee/status and preserved user choices:
 - “修复 review 发现的问题”：代码实施交 Issue 负责人；不额外直接启动 Run，除非另有明确启动授权。
 
 These illustrate decisions, not performed Git operations. Report actual results in chat unless a separate recording requirement applies.
+
+## Explicit follow-up examples
+
+Illustrative outcomes, assuming target checks and readback actually succeeded:
+
+- “跟进 CERE-51”：正文和相关评论已核对，阻塞原因仍是缺少复现数据；跟进分析完成后，已核验状态从 blocked 改为 todo。状态迁移不代表阻塞已解决。
+- “跟进审核中的任务”：总结交付情况及未验证项后，重新核验归属、状态和 revision，in_review → todo；不表示人工验收或关闭。
+- “只查看 CERE-51，不改状态”：只报告事实；即使当前 blocked 也不迁移。
+- 写前发现 blocked 已变为 in_review：保留最新状态，报告并发变化；不套用另一条迁移覆盖。
+- 写入超时但读回 todo：报告已核验的 todo，只执行了一次写入；不补 rerun 或 Agent mention。
+
+These examples authorize no real operation. Apply follow-up.md for completion, ownership, concurrency, trigger suppression and readback; keep the operation plan out of the issue body.

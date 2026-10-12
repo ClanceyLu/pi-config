@@ -314,7 +314,7 @@ test('operation routes resolve existing references without loading unrelated det
   assert.match(loaded['Create issue'], /explicit authorization/);
   assert.match(loaded['Create issue'], /label list/);
   assert.doesNotMatch(loaded['Follow up/read issue'], /label create|issue assign <id>/);
-  assert.match(loaded['Follow up/read issue'], /Do not update, reassign, restart or monitor/);
+  assert.match(loaded['Follow up/read issue'], /outside that transition, do not update, reassign, restart or monitor/);
   assert.match(loaded['Assign/execute/stop'], /--no-start/);
   assert.match(loaded['Assign/execute/stop'], /if unavailable, stop and ask/);
   assert.match(loaded['Assign/execute/stop'], /Verify ownership and actual Run state afterward/);
@@ -405,4 +405,66 @@ test('body separation reaches authoring, execution and resident PM guidance', as
   const h = harness({}, { enabled: true, target }); await h.start();
   assert.match((await h.before()).systemPromptOptions.sections.multica_mode, /manage planning\/readiness through verified platform status/);
   assert.equal(h.calls.length, 0);
+});
+
+
+test('PM routes explicit follow-up transitions while commands remain reads', async () => {
+  const h = harness({}, { enabled: true, target }); await h.start();
+  const section = (await h.before()).systemPromptOptions.sections.multica_mode;
+  assert.match(section, /Completed explicit follow-up moves verified blocked or in_review targets to todo/);
+  assert.match(section, /issue-workflow\/references\/follow-up.md/);
+  assert.match(section, /incomplete\/failed follow-ups are unchanged/);
+  assert.match(section, /\/pm status and \/pm issue remain reads/);
+  assert.equal(h.calls.length, 0);
+  await h.command('status');
+  await h.command('issue');
+  assert.ok(h.calls.every(call => !/issue (status|update|assign|rerun|wakeup|comment add)/.test(call.join(' '))));
+});
+
+// Static documentation contract only; this does not execute a migration or model.
+function assertFollowUpContract(text) {
+  const section = text.split('## Completed explicit follow-up → todo\n')[1]?.split('\n## ')[0];
+  assert.ok(section, 'completion transition section must exist');
+  const step = number => {
+    const value = section.split('\n').find(line => line.startsWith(`${number}. `));
+    assert.ok(value, `completion step ${number} must exist`);
+    return value;
+  };
+  assert.match(section, /Apply only to the target of the user's explicit follow-up request/);
+  assert.match(section, /body and relevant comments were successfully read, required Run checks succeeded, and analysis and a factual summary with blockers\/next action are ready/);
+  assert.match(section, /Failed reads, missing relevant context or unfinished analysis permit no transition/);
+  assert.match(step(1), /use exact keys `blocked`, `in_review`, `todo`, not display-name guesses/);
+  assert.match(step(1), /Other statuses, including `backlog`, `todo`, `in_progress`, `done`, `cancelled` and custom keys, remain unchanged/);
+  // Scope checks to the preflight step: initial capture or CAS advice cannot satisfy it.
+  assert.match(step(2), /After completing analysis and summary, freshly read the target and relevant active Runs immediately before writing/);
+  assert.match(step(2), /Compare identity, workspace\/project, assignee, status and revision with the analyzed snapshot/, 'preflight must compare ownership, assignee, status and revision');
+  assert.match(step(2), /A mismatch, changed revision \(including away-and-back status changes\), failed read or unclear ownership means skip the write/);
+  assert.match(step(2), /do not overwrite it or automatically rebase\/retry/);
+  assert.match(step(3), /For an unchanged eligible target, perform at most one/);
+  const commands = [...section.matchAll(/`multica issue status <issue-id> ([^`]+)`/g)].map(match => match[1]);
+  assert.deepEqual(commands, ['todo'], 'the single migration command must target todo');
+  assert.match(step(5), /Read back issue identity\/ownership, stored status, assignment and actual Run state after the attempt, including errors\/timeouts/);
+  assert.match(step(5), /A verified `todo` is success/);
+  assert.match(step(5), /a different status or failed verification is reported as unconfirmed\/changed, never corrected by a second write/);
+  assert.match(step(5), /Do not blindly retry, roll back, or add another trigger/);
+}
+
+const readFollowUpContract = () => readFileSync(join(agent, 'skills/issue-workflow/references/follow-up.md'), 'utf8');
+
+test('follow-up document protects completion, eligibility, preflight and readback', () => {
+  assertFollowUpContract(readFollowUpContract());
+});
+
+test('follow-up contract rejects a cancelled migration target', () => {
+  const original = readFollowUpContract();
+  const mutated = original.replace('`multica issue status <issue-id> todo`', '`multica issue status <issue-id> cancelled`');
+  assert.notEqual(mutated, original, 'negative fixture must actually alter the command');
+  assert.throws(() => assertFollowUpContract(mutated), { code: 'ERR_ASSERTION', message: /single migration command must target todo/ });
+});
+
+test('follow-up contract rejects removal of preflight status and revision checks', () => {
+  const original = readFollowUpContract();
+  const mutated = original.replace('Compare identity, workspace/project, assignee, status and revision with the analyzed snapshot.', 'Compare identity, workspace/project and assignee with the analyzed snapshot.');
+  assert.notEqual(mutated, original, 'negative fixture must actually remove the preflight checks');
+  assert.throws(() => assertFollowUpContract(mutated), { code: 'ERR_ASSERTION', message: /preflight must compare ownership, assignee, status and revision/ });
 });
