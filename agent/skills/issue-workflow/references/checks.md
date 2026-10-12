@@ -172,7 +172,12 @@ Evaluate these against execution.md and both Skill entrypoints. A static/manual 
 
 | Fixture | Required decision/evidence |
 | --- | --- |
-| First implementation; verified unused mapping | Create one Issue branch/worktree from verified base; record Issue/repository/path/branch/base |
+| First implementation; verified unused mapping; shared checkout contains staged/unstaged/untracked changes | Create one Issue branch/worktree from explicit main commit SHA (or verified primary exception), verify new HEAD/clean status; record mapping/base; no automatic dirty-content import or shared-directory cleanup |
+| UI task proposes replacing map config, backend or signing rules | Stop out-of-scope portion for separate review/authorization; no bundled replacement |
+| Agent provides a whole source-tree copy or conflict-free merge that removes existing capabilities | Integrate reviewed task diff only; inspect deletions/replacements and preservation checks; unexplained capability loss blocks integration |
+| Final Android delivery uses an old APK or only Debug/emulator map evidence | Require final merged commit, rebuilt APK SHA-256/build type and installed-artifact match; production maps need final Release physical-device results; missing checks block acceptance/closure |
+| Web delivery has only mocks, screenshots or no authorized real test environment | Require final deployed revision and real authorized backend/permission flow evidence; report blocker, no acceptance/closure |
+| Target changes after final artifact validation | Reassess final revision and rebuild/retest affected checks; no reuse of stale acceptance evidence |
 | Retry with owned dirty worktree | Verify and reuse same mapping; retain changes, no new per-Run branch |
 | Another Issue owns path; missing mapping; active writer | Stop affected edits, preserve files, resolve ownership; no forced checkout |
 | Accepted exact revision, checks pass, verified primary branch called trunk | Authorized merge to trunk, verify integrated changes/checks, then permitted close/readback; no hard-coded branch |

@@ -10,10 +10,10 @@ Use a result or symptom as the title, not a file edit. Keep the body proportiona
 
 1. Background and impact: observed facts, who is affected, why it matters.
 2. Goal: an observable result, or a decision question for research.
-3. Scope and non-goals: include real compatibility, privacy, permissions, and data-preservation constraints.
+3. Scope and non-goals: identify allowed modules/files and behavior; include real compatibility, privacy, permissions, and data-preservation constraints. UI-only work excludes map configuration, backend services and signing-rule replacements; necessary scope expansion needs separate review and authorization.
 4. Context: repository/version, reproduction inputs, relevant links and decisions; redact secrets.
 5. Deliverables and ownership: what is handed over, who implements, who accepts.
-6. Acceptance: pass/fail observations, validation method/environment, normal and important failure/edge cases.
+6. Acceptance: pass/fail observations, validation method/environment, normal and important failure/edge cases. Acceptance targets the final merged artifact: record its commit and, for Android, APK SHA-256 and build type; production maps require Release physical-device validation, and web flows require a real authorized test environment. Define preservation checks for existing capabilities affected by deletions/replacements.
 
 For draft-only requests, even a vague request gets a usable skeleton with Goal, Scope/non-goals, Deliverables, and Acceptance sections; mark unknowns in the response, not in a published issue. For creation requests, clarify undecided content with the user first, then create only from confirmed answers. For "improve a plugin", ask which plugin and what observable problem/result, and confirm scope and acceptance before creation; never invent them as agreed. A confirmed research question or accurately labeled unverified observation is valid issue content, not an unresolved authoring decision; never present unknown results as verified.
 
