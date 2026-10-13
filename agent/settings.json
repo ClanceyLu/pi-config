@@ -9,7 +9,8 @@
     "+tool_search"
   ],
   "packages": [
-    "npm:@dietrichgebert/ponytail"
+    "npm:@dietrichgebert/ponytail",
+    "npm:pi-compact-tools"
   ],
   "editorPaddingX": 1,
   "hideThinkingBlock": false,
