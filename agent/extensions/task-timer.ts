@@ -27,15 +27,14 @@ export default function taskTimer(pi: ExtensionAPI) {
 		updateTimer = undefined;
 	}
 
-	function updateWorkingMessage(ctx: ExtensionContext): void {
+	function updateWidget(ctx: ExtensionContext): void {
 		if (startedAt === undefined) return;
-		ctx.ui.setWorkingMessage(`执行中 · ${formatElapsed(Date.now() - startedAt)}`);
+		ctx.ui.setWidget(WIDGET_KEY, [`执行中 · ${formatElapsed(Date.now() - startedAt)}`], { placement: "aboveEditor" });
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
 		startedAt = undefined;
 		stopUpdates();
-		ctx.ui.setWorkingMessage();
 		ctx.ui.setWidget(WIDGET_KEY, undefined);
 	});
 
@@ -45,9 +44,9 @@ export default function taskTimer(pi: ExtensionAPI) {
 
 		ctx.ui.setWidget(WIDGET_KEY, undefined);
 		startedAt = Date.now();
-		updateWorkingMessage(ctx);
+		updateWidget(ctx);
 		if (ctx.mode === "tui") {
-			updateTimer = setInterval(() => updateWorkingMessage(ctx), UPDATE_INTERVAL_MS);
+			updateTimer = setInterval(() => updateWidget(ctx), UPDATE_INTERVAL_MS);
 		}
 	});
 
@@ -57,14 +56,12 @@ export default function taskTimer(pi: ExtensionAPI) {
 		const elapsed = formatElapsed(Date.now() - startedAt);
 		stopUpdates();
 		startedAt = undefined;
-		ctx.ui.setWorkingMessage();
-		ctx.ui.setWidget(WIDGET_KEY, [`耗时 ${elapsed}`]);
+		ctx.ui.setWidget(WIDGET_KEY, [`耗时 ${elapsed}`], { placement: "aboveEditor" });
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		stopUpdates();
 		startedAt = undefined;
-		ctx.ui.setWorkingMessage();
 		ctx.ui.setWidget(WIDGET_KEY, undefined);
 	});
 }
