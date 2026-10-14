@@ -1,10 +1,10 @@
 # Follow up and deliver
 
-Read the current issue body, scan comment threads and expand relevant ones using multica.md. Read active Runs when reporting execution state. Summarize facts, blockers and next action. An explicit follow-up request includes the completion transition below; outside that transition, do not update, reassign, restart or monitor unless explicitly requested. Read-only requests (including “只查看，不改状态”) never enter this transition.
+Read the current issue body, scan comment threads and expand relevant ones using multica.md. Read active Runs when reporting execution state. Summarize facts, blockers and next action. An explicit follow-up request includes the completion transition below; outside that transition, do not update, reassign, restart or monitor unless explicitly requested. Read-only requests (including “只查看，不改状态”), /pm status and /pm issue never enter this transition.
 
 Git/PR collaboration results stay in chat unless recording is separately required; this Issue delivery workflow does not force an Issue write for a PR review, commit, merge or push.
 
-When explicitly asked to request code implementation by the owner, reply to or update the issue with the problem, required changes and next step; use execution.md for the write and direct-start boundaries. A general fix request does not authorize rerun. Read-only inspection and review-only feedback remain non-implementation requests. The completion transition is a status operation, not permission to take over implementation.
+While PM is enabled, for authorized code implementation by the owner, reply to or update the issue with the problem, required changes and next step; use execution.md for the write and direct-start boundaries. A general fix request does not authorize rerun. Read-only inspection and review-only feedback remain non-implementation requests. The completion transition is a status operation, not permission to take over implementation.
 
 ## Completed explicit follow-up → todo
 
