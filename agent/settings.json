@@ -10,7 +10,8 @@
   ],
   "packages": [
     "npm:@dietrichgebert/ponytail",
-    "npm:pi-compact-tools"
+    "npm:pi-compact-tools",
+    "npm:pi-codebuddy-sdk"
   ],
   "editorPaddingX": 1,
   "hideThinkingBlock": false,
