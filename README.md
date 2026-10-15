@@ -116,6 +116,8 @@ git diff --cached
 
 同步资源后在 Pi 中运行 `/reload`；修改启动默认模型后，在新会话确认。
 
+`agent/extensions/compact-footer.ts` 精简底部模型显示：隐藏 provider，自动路由后仅显示实际模型，如 `gpt-6.1-sol · medium`（路由前显示 `auto`），思考等级实时显示当前选择值（包括快捷键切换），不使用上次回复的等级。目录、分支、上下文使用百分比与模型合并为一行，目录信息最多占终端宽度的三分之一，不显示 Token 数、缓存统计和费用；其他扩展状态仍会显示；完整模型信息可通过 `/model` 查看。
+
 ### 更新 Pi 和 packages
 
 ```zsh
