@@ -55,7 +55,7 @@ export function groupTools(children: readonly Component[], makeGroup: (rows: Too
 }
 
 export class ToolGroup extends Container {
-	constructor(rows: ToolRow[], members: Component[], state: { expanded: boolean }, theme: Theme, running: ReadonlySet<string>, repaint: () => void) {
+	constructor(rows: ToolRow[], members: Component[], state: { expanded: boolean }, theme: Theme, running: ReadonlySet<string>, repaint: () => void, visible: ReadonlySet<string> = running) {
 		super();
 		this.addChild({
 			invalidate() {},
@@ -85,6 +85,7 @@ export class ToolGroup extends Container {
 		});
 		// Opening a group reveals existing Compact rows without opening their results.
 		if (state.expanded) for (const member of members) this.addChild(member);
+		else for (const row of rows) if (visible.has(row.toolCallId)) this.addChild(row);
 	}
 }
 
@@ -96,19 +97,40 @@ function isSilent(): boolean {
 export default function toolGroups(pi: ExtensionAPI) {
 	let enabled = true, expanded = false;
 	let states = new WeakMap<ToolRow, { expanded: boolean }>();
-	const running = new Set<string>();
+	const running = new Set<string>(), visible = new Set<string>();
+	const timers = new Map<string, ReturnType<typeof setTimeout>>();
 	let detach: (() => void) | undefined;
 	let repaint: (() => void) | undefined;
+	const clearExecution = () => {
+		for (const timer of timers.values()) clearTimeout(timer);
+		timers.clear(); running.clear(); visible.clear();
+	};
 
-	pi.on("tool_execution_start", (event) => { if (!event.parentToolCallId) running.add(event.toolCallId); });
-	pi.on("tool_execution_end", (event) => { running.delete(event.toolCallId); });
-	pi.on("agent_end", () => { running.clear(); repaint?.(); });
-	pi.on("session_shutdown", () => { detach?.(); detach = undefined; repaint = undefined; running.clear(); });
+	pi.on("tool_execution_start", (event) => {
+		if (event.parentToolCallId || !repaint) return;
+		clearTimeout(timers.get(event.toolCallId));
+		timers.delete(event.toolCallId);
+		running.add(event.toolCallId); visible.add(event.toolCallId); repaint();
+	});
+	pi.on("tool_execution_end", (event) => {
+		if (!running.delete(event.toolCallId)) return;
+		timers.set(event.toolCallId, setTimeout(() => {
+			timers.delete(event.toolCallId);
+			visible.delete(event.toolCallId);
+			repaint?.();
+		}, 300));
+		repaint?.();
+	});
+	pi.on("agent_end", () => {
+		for (const id of running) visible.delete(id);
+		running.clear(); repaint?.();
+	});
+	pi.on("session_shutdown", () => { detach?.(); detach = undefined; repaint = undefined; clearExecution(); });
 	pi.on("session_start", (_event, ctx) => {
 		detach?.();
 		detach = undefined;
 		repaint = undefined;
-		running.clear();
+		clearExecution();
 		states = new WeakMap();
 		if (ctx.mode !== "tui") return;
 		ctx.ui.setWidget(WIDGET, (tui) => {
@@ -136,12 +158,14 @@ export default function toolGroups(pi: ExtensionAPI) {
 				chat.children = groupTools(original, (rows, members) => {
 					let state = states.get(rows[0]);
 					if (!state) { state = { expanded }; states.set(rows[0], state); }
-					return new ToolGroup(rows, members, state, ctx.ui.theme, running, repaint!);
+					return new ToolGroup(rows, members, state, ctx.ui.theme, running, repaint!, visible);
 				});
 				try { return render(); } finally { chat.children = original; }
 			};
 			hook.draw = draw;
-			const cleanup = () => { if (hook.draw === draw) hook.draw = undefined; };
+			const cleanup = () => {
+				if (hook.draw === draw) { hook.draw = undefined; clearExecution(); }
+			};
 			detach = cleanup;
 			return { render: () => [], invalidate() {}, dispose: cleanup };
 		}, { placement: "belowEditor" });

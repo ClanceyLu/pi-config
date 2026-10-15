@@ -123,7 +123,8 @@ git diff --cached
 `agent/extensions/tool-groups.ts` 在 `pi-compact-tools` 的 Compact 工具行外增加一层分组，支持 `read`、`bash`、`codemode` 及其他工具，不修改执行或会话记录。
 
 - 运行 `/reload` 加载；选择 `/compact-tools compact`，并用 `/silent off` 显示工具。
-- 默认显示调用数量及执行中、失败、未完成状态；点击摘要展开为原来的 Compact 行，再点击工具行查看详情。收起分组不会重置工具行的展开状态。
+- 分组采用单行摘要，例如 `▸ 工具 2 · read 1 · bash 1 （展开）`；展开后显示 `▾` 和“收起”，摘要统一使用弱化颜色。
+- 默认显示调用数量及执行中、失败、未完成状态；运行中的工具行自动显示，结束后保留 300ms 再自动收起。点击摘要可展开全部 Compact 行，再点击工具行查看详情；手动展开的分组保持展开，收起分组不会重置工具行的展开状态。
 - 键盘操作：`/tool-groups expand` 展开所有分组，`/tool-groups collapse` 收起；工具详情仍可用 `Ctrl+O` 切换。`/tool-groups off` 关闭分组，`on` 恢复。
 - 连续工具调用可跨纯思考内容合并，正文、提示和最终回复不隐藏。Silent 开启时不显示分组；`codemode` 的内部调用仍由原插件显示摘要，不创建额外工具行。
 
