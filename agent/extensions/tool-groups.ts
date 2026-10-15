@@ -161,8 +161,13 @@ export default function toolGroups(pi: ExtensionAPI) {
 				if (!enabled || isSilent()) return render();
 				const original = chat.children;
 				chat.children = groupTools(original, (rows, members) => {
-					let state = states.get(rows[0]);
-					if (!state) { state = { expanded }; states.set(rows[0], state); }
+					let state: { expanded: boolean } | undefined;
+					for (const row of rows) {
+						const previous = states.get(row);
+						if (previous && (!state || previous.expanded)) state = previous;
+					}
+					state ??= { expanded };
+					for (const row of rows) states.set(row, state);
 					return new ToolGroup(rows, members, state, ctx.ui.theme, repaint!);
 				}, unfolded);
 				try { return render(); } finally { chat.children = original; }

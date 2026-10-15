@@ -81,10 +81,10 @@ export function parseFiles(names: string, stats: string): ReviewFile[] {
 export async function snapshot(cwd: string, signal?: AbortSignal): Promise<Snapshot> {
 	const root = (await git(cwd, ["rev-parse", "--show-toplevel"], signal)).replace(/\n$/, "");
 	const state = await identity(root, signal);
-	const flags = ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--find-renames"];
+	const flags = ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--find-renames", "--ignore-submodules=none"];
 	const files = parseFiles(await git(root, [...flags, "--name-status", "-z"], signal), await git(root, [...flags, "--numstat", "-z"], signal));
 	if (!files.length) throw new Error("暂存区为空。请先明确提交范围并完成授权暂存，再打开审阅。");
-	await git(root, ["diff", "--cached", "--check"], signal);
+	await git(root, [...flags, "--check"], signal);
 	const outside = (await git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], signal)).split("\0");
 	let count = 0;
 	for (let i = 0; i < outside.length && outside[i]; i++) {
@@ -99,7 +99,7 @@ export async function snapshot(cwd: string, signal?: AbortSignal): Promise<Snaps
 
 export async function patch(snapshot: Snapshot, file: ReviewFile, signal?: AbortSignal) {
 	await unchanged(snapshot, signal);
-	const text = await git(snapshot.root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", "--submodule=short", "--", ...(file.oldPath ? [file.oldPath] : []), file.path], signal);
+	const text = await git(snapshot.root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--find-renames", "--ignore-submodules=none", "--submodule=short", "--", ...(file.oldPath ? [file.oldPath] : []), file.path], signal);
 	await unchanged(snapshot, signal);
 	if (!text) throw new Error("未能读取该文件的差异，请重新检查提交范围。");
 	return text;

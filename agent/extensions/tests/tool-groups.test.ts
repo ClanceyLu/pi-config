@@ -315,6 +315,27 @@ test("new calls join an opened group without changing its expansion state", () =
 	h.emit("session_shutdown");
 });
 
+test("an earlier finishing tool preserves a later group's manual expansion", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const h = harness(), read = row("read"), bash = row("bash");
+	read.result = undefined;
+	h.chat.addChild(read); h.chat.addChild(bash);
+	h.emit("session_start");
+	h.emit("tool_execution_start", { toolCallId: "read" });
+	h.chat.render(120);
+	h.chat.handleMouse(click(2));
+	assert.match(h.chat.render(120).join("\n"), /bash: compact/);
+	read.result = { isError: false };
+	h.emit("tool_execution_end", { toolCallId: "read" });
+	t.mock.timers.tick(1000);
+	assert.deepEqual(h.chat.render(120), ["", " ⦁ read 1 · bash 1", " ├ read: compact", " └ bash: compact"]);
+	h.chat.handleMouse(click(1));
+	assert.deepEqual(h.chat.render(120), ["", " ⦁ read 1 · bash 1"]);
+	await h.command("expand");
+	assert.match(h.chat.render(120).join("\n"), /bash: compact/);
+	h.emit("session_shutdown");
+});
+
 test("render errors restore original children; silent mode does not leak group summaries", () => {
 	const silentKey = Symbol.for("pi-compact-tools.silent.state");
 	const global = globalThis as typeof globalThis & { [silentKey]?: { active: boolean; enabled: boolean } };

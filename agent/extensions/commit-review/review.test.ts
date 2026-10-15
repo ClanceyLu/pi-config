@@ -65,6 +65,30 @@ test("rename, binary, delete and unstaged remainder are represented", async (t) 
 	assert.doesNotMatch(await patch(s, s.files.find((file) => file.path === "new")!), /unstaged/);
 });
 
+test("staged submodules stay visible even when Git is configured to ignore them", async (t) => {
+	const f = fixture(t);
+	f.write("a", "base\n"); f.git("add", "."); f.git("commit", "-qm", "initial");
+	const first = f.git("rev-parse", "HEAD").trim();
+	f.git("update-index", "--add", "--cacheinfo", `160000,${first},vendor`);
+	f.git("commit", "-qm", "add submodule");
+	const second = f.git("rev-parse", "HEAD").trim();
+	for (const status of ["M", "D"]) {
+		if (status === "M") f.git("update-index", "--cacheinfo", `160000,${second},vendor`);
+		else f.git("update-index", "--force-remove", "vendor");
+		f.write("a", "changed\n"); f.git("add", "a");
+		f.git("config", "diff.ignoreSubmodules", "all");
+		const s = await snapshot(f.root);
+		assert.deepEqual(s.files.map((file) => file.path), ["a", "vendor"]);
+		const file = s.files.find((file) => file.path === "vendor")!;
+		assert.equal(file.status, status);
+		assert.equal(file.removed, "1");
+		assert.equal(file.added, status === "M" ? "1" : "0");
+		assert.match(await patch(s, file), new RegExp(`-Subproject commit ${first}`));
+		if (status === "M") assert.match(await patch(s, file), new RegExp(`\\+Subproject commit ${second}`));
+		await unchanged(s);
+	}
+});
+
 test("index, HEAD and branch changes invalidate confirmation", async (t) => {
 	const f = fixture(t);
 	f.write("a", "a\n"); f.git("add", ".");

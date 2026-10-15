@@ -22,6 +22,50 @@ test("formatting fits narrow terminals and wide characters", () => {
 	assert.equal(alignStats("↑1k", "sol", 12), "↑1k      sol");
 });
 
+test("footer shows the live routed model before persistence and unsubscribes on disposal", () => {
+	const handlers = new Map<string, Function>();
+	let factory: Function;
+	let leaf = "old";
+	let scans = 0, repaints = 0;
+	let message = { role: "assistant", model: "previous-model" };
+	const ctx = {
+		mode: "tui", model: model("auto", "pi-virtual"), thinkingLevel: "high",
+		ui: { setFooter: (value: Function) => { factory = value; } },
+		getContextUsage: () => ({ percent: 10 }),
+		sessionManager: {
+			getSessionId: () => "session", getLeafId: () => leaf, getEntryCount: () => 1,
+			getBranch: () => { scans++; return [{ type: "message", message }]; },
+			getCwd: () => "/tmp/project", getSessionName: () => "",
+		},
+	} as unknown as ExtensionContext;
+	compactFooter({ on: (event: string, handler: Function) => {
+		handlers.set(event, handler);
+		return () => handlers.delete(event);
+	} } as unknown as ExtensionAPI);
+	handlers.get("session_start")!({}, ctx);
+	const footer = factory!({ requestRender() { repaints++; } }, { fg: (_color: string, text: string) => text }, {
+		onBranchChange: () => () => {}, getGitBranch: () => "", getExtensionStatuses: () => new Map(),
+	});
+	assert.match(footer.render(120)[0], /previous-model · high$/);
+	leaf = "user";
+	handlers.get("message_start")?.({ message: { role: "assistant", model: "routed-model" } }, ctx);
+	assert.match(footer.render(120)[0], /routed-model · high$/);
+	assert.equal(scans, 1, "a new user entry must not overwrite the live route with history");
+	handlers.get("message_update")?.({ message: { role: "assistant", model: "updated-model" } }, ctx);
+	assert.match(footer.render(120)[0], /updated-model · high$/);
+	handlers.get("message_start")?.({ message: { role: "toolResult", model: "not-a-route" } }, ctx);
+	assert.match(footer.render(120)[0], /updated-model · high$/);
+	assert.equal(repaints, 2);
+	message = { role: "assistant", model: "updated-model" }; leaf = "finished";
+	assert.match(footer.render(120)[0], /updated-model · high$/);
+	assert.equal(scans, 2);
+	message = { role: "assistant", model: "another-branch-model" }; leaf = "another-branch";
+	assert.match(footer.render(120)[0], /another-branch-model · high$/);
+	footer.dispose();
+	assert.equal(handlers.has("message_start"), false);
+	assert.equal(handlers.has("message_update"), false);
+});
+
 test("footer shows only context percentage alongside location and model, preserving warnings and extension statuses", () => {
 	let start: Function;
 	let factory: Function;
@@ -43,7 +87,10 @@ test("footer shows only context percentage alongside location and model, preserv
 			getCwd: () => "/tmp/project", getSessionName: () => "Work",
 		},
 	} as unknown as ExtensionContext;
-	compactFooter({ on: (_event: string, handler: Function) => { start = handler; } } as unknown as ExtensionAPI);
+	compactFooter({ on: (event: string, handler: Function) => {
+		if (event === "session_start") start = handler;
+		return () => {};
+	} } as unknown as ExtensionAPI);
 	start!({}, { mode: "rpc" });
 	assert.equal(factory!, undefined);
 	start!({}, ctx);

@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { relative, isAbsolute, sep } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, MessageStartEvent } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 export function formatModel(ctx: Pick<ExtensionContext, "model" | "thinkingLevel">, routed?: { model: string; thinkingLevel?: string }): string {
@@ -26,12 +26,24 @@ export default function compactFooter(pi: ExtensionAPI) {
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			let statsKey = "";
 			let routed: { model: string; thinkingLevel?: string } | undefined;
+			const sessionKey = () => {
+				const manager = ctx.sessionManager;
+				return `${manager.getSessionId()}:${manager.getLeafId()}:${manager.getEntryCount()}`;
+			};
+			const updateRoute = (event: Pick<MessageStartEvent, "message">) => {
+				if (event.message.role !== "assistant") return;
+				routed = event.message;
+				statsKey = sessionKey();
+				tui.requestRender();
+			};
+			const unsubscribe = [footerData.onBranchChange(() => tui.requestRender()),
+				pi.on("message_start", updateRoute), pi.on("message_update", updateRoute)];
 			return {
-				dispose: footerData.onBranchChange(() => tui.requestRender()),
+				dispose() { for (const off of unsubscribe) off(); },
 				invalidate() {},
 				render(width) {
 					const manager = ctx.sessionManager;
-					const key = `${manager.getSessionId()}:${manager.getLeafId()}:${manager.getEntryCount()}`;
+					const key = sessionKey();
 					if (key !== statsKey) {
 						routed = undefined;
 						for (const entry of manager.getBranch()) {
