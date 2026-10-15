@@ -196,7 +196,7 @@ test("commit-only panels show the target branch, staged diff and message preview
 	assert.match(screen, /diff --git/);
 	assert.match(screen, /╭ 提交信息/);
 	assert.match(screen, /完整正文/);
-	for (const key of ["m", "\x1b", "c"]) {
+	for (const key of ["m", "\x1b", "p"]) {
 		f.ui.handleInput(key);
 		assert.match(f.ui.render(120).join("\n"), /提交分支：feature\/提交审阅/);
 	}
@@ -250,49 +250,50 @@ test("full path view preserves rename paths and scrolls long escaped paths on na
 	rows = 12;
 	let narrow = ui.render(20).join("\n");
 	assert.doesNotMatch(narrow, /renamed-tail/);
-	for (let i = 0; i < 10; i++) { ui.handleInput("\x1b[6~"); narrow += "\n" + ui.render(20).join("\n"); }
-	assert.ok(narrow.replace(/\s|│/g, "").includes("renamed-tail.ts"));
+	let pathContent = "";
+	for (let i = 0; i < 100; i++) {
+		const screen = ui.render(20), end = screen.findIndex((line) => line.startsWith("╰"));
+		pathContent += screen.slice(3, end).map((line) => sliceByColumn(line, 1, 18)).join("");
+		narrow += "\n" + screen.join("\n");
+		ui.handleInput("\x1b[6~");
+	}
+	assert.ok(pathContent.replace(/\s/g, "").includes("renamed-tail.ts"));
 	assert.doesNotMatch(narrow, /\u202e/);
 	for (const width of [1, 20, 60, 120]) assert.ok(ui.render(width).every((line) => visibleWidth(line) <= width));
 	assert.equal(f.git("ls-files", "--stage", "-z"), index);
 	assert.deepEqual(decisions, []);
 });
 
-test("confirmation defaults to confirm, supports returning, message scrolling, adjustment and cancellation", async (t) => {
+test("full message remains scrollable, with independent adjustment and cancellation actions", async (t) => {
 	const f = await uiFixture(t);
-	f.ui.render(100); f.ui.handleInput("c");
-	assert.match(f.ui.render(100).join("\n"), /›\[确认提交\]/);
-	assert.match(f.ui.render(100).join("\n"), /Enter 确认提交/);
+	f.ui.render(100); f.ui.handleInput("m");
+	assert.match(f.ui.render(100).join("\n"), /完整提交信息/);
 	f.ui.handleInput("\x1b[6~");
 	assert.match(f.ui.render(100).join("\n"), /正文/);
-	f.ui.handleInput("\x1b[D"); f.ui.handleInput("\r"); assert.deepEqual(f.decisions, []);
-	f.ui.handleInput("c"); f.ui.handleInput("\x1b[C");
-	assert.match(f.ui.render(30).join("\n"), /›\[调整范围或信息\]/);
+	assert.deepEqual(f.decisions, []);
 	for (const width of [1, 20, 60, 90, 120]) {
 		const lines = f.ui.render(width);
 		assert.ok(lines.length <= 25);
 		assert.ok(lines.every((line) => visibleWidth(line) <= width));
 	}
-	f.ui.handleInput("\r");
+	f.ui.handleInput("a");
 	assert.deepEqual(f.decisions, ["adjust"]);
 	const cancel = await uiFixture(t); cancel.ui.handleInput("\x1b"); assert.deepEqual(cancel.decisions, ["cancelled"]);
 });
 
-test("footer lists all review controls without truncation and confirms with c then Enter", async (t) => {
+test("footer lists all review controls without truncation and c confirms without another step", async (t) => {
 	const f = await uiFixture(t); await loaded(f.ui);
 	for (const width of [40, 60, 100]) {
 		const screen = f.ui.render(width), footer = screen.slice(screen.indexOf("操作") + 1).join(" ");
-		for (const label of ["继续确认", "完整路径", "提交信息", "切换区域", "查看差异", "筛选", "浏览", "横移", "首尾", "改动块", "折行", "取消审阅"]) {
+		for (const label of ["确认提交", "调整范围或信息", "完整路径", "提交信息", "切换区域", "查看差异", "筛选", "浏览", "横移", "首尾", "改动块", "折行", "取消审阅"]) {
 			assert.ok(footer.includes(label), `missing ${label} at width ${width}`);
 		}
 		assert.doesNotMatch(footer, /…/);
 		assert.ok(screen.length <= 25);
 		assert.ok(screen.every((line) => visibleWidth(line) <= width));
 	}
-	f.ui.handleInput("c");
-	assert.deepEqual(f.decisions, [], "c only opens confirmation");
-	assert.match(f.ui.render(60).join("\n"), /›\[确认提交\]/);
-	f.ui.handleInput("\r");
+	f.ui.handleInput("c"); f.ui.handleInput("c");
+	assert.doesNotMatch(f.ui.render(60).join("\n"), /Enter 确认提交|›\[确认提交\]/);
 	for (let i = 0; i < 100 && !f.decisions.length; i++) await tick();
 	assert.deepEqual(f.decisions, ["confirmed"]);
 });
@@ -309,9 +310,9 @@ test("filter, empty search and file navigation do not authorize a commit", async
 
 test("confirmation rechecks the index and refuses concurrent changes", async (t) => {
 	const f = await uiFixture(t); await loaded(f.ui);
-	f.ui.render(100); f.ui.handleInput("c");
+	f.ui.render(100);
 	f.write("a.ts", "changed\n"); f.git("add", ".");
-	f.ui.handleInput("\r");
+	f.ui.handleInput("c");
 	for (let i = 0; i < 100 && !f.ui.render(100).join("").includes("已变化"); i++) await tick();
 	assert.deepEqual(f.decisions, []);
 	assert.match(f.ui.render(100).join("\n"), /已变化/);
@@ -319,7 +320,7 @@ test("confirmation rechecks the index and refuses concurrent changes", async (t)
 
 test("Escape during asynchronous verification cancels instead of confirming in the background", async (t) => {
 	const f = await uiFixture(t); await loaded(f.ui);
-	f.ui.render(100); f.ui.handleInput("c"); f.ui.handleInput("\r"); f.ui.handleInput("\x1b");
+	f.ui.render(100); f.ui.handleInput("c"); f.ui.handleInput("\x1b");
 	await new Promise((resolve) => setTimeout(resolve, 200));
 	assert.deepEqual(f.decisions, ["cancelled"]);
 });
@@ -332,7 +333,7 @@ test("tool confirms exact message and paths, read-only; cancellation and non-TUI
 	const signal = new AbortController();
 	const ctx: any = { mode: "tui", cwd: f.root, ui: { custom: async (factory: any) => new Promise((resolve) => {
 		const ui = factory({ terminal: { rows: 25 }, requestRender() {} }, theme, {}, resolve);
-		ui.render(100); ui.handleInput("c"); ui.handleInput("\r");
+		ui.render(100); ui.handleInput("c");
 	}) } };
 	const result = await tool.execute("id", { message: "feat: 新增文件" }, signal.signal, undefined, ctx);
 	assert.equal(result.details.decision, "confirmed"); assert.equal(result.details.message, "feat: 新增文件");

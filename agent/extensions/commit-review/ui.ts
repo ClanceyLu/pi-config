@@ -12,8 +12,6 @@ export class ReviewUI implements Component {
 	private filtering = false;
 	private selected = 0;
 	private pane: "files" | "diff" = "files";
-	private stage: "review" | "confirm" = "review";
-	private action = 0;
 	private busy = false;
 	private error = "";
 	private closed = false;
@@ -91,7 +89,6 @@ export class ReviewUI implements Component {
 			this.finish("confirmed");
 		} catch (error) {
 			this.error = labelText(String(error));
-			this.stage = "review";
 		} finally { this.busy = false; if (!this.closed) this.refresh(); }
 	}
 	handleInput(data: string) {
@@ -102,24 +99,13 @@ export class ReviewUI implements Component {
 			this.selected = 0; this.load(); this.refresh(); return;
 		}
 		if (matchesKey(data, "escape")) {
-			if (this.stage === "confirm") this.stage = "review";
-			else if (this.pathView) this.pathView = false;
+			if (this.pathView) this.pathView = false;
 			else if (this.messageView) this.messageView = false;
 			else if (this.pane === "diff") this.pane = "files";
 			else return this.finish("cancelled");
 		} else if (this.busy) return;
-		else if (this.stage === "confirm") {
-			if (matchesKey(data, "pageUp")) this.messageScroll.scrollBy(-this.height);
-			else if (matchesKey(data, "pageDown")) this.messageScroll.scrollBy(this.height);
-			else if (matchesKey(data, "right") || matchesKey(data, "tab") || matchesKey(data, "down")) this.action = (this.action + 1) % 4;
-			else if (matchesKey(data, "left") || matchesKey(data, "shift+tab") || matchesKey(data, "up")) this.action = (this.action + 3) % 4;
-			else if (matchesKey(data, "enter")) {
-				if (this.action === 0) this.stage = "review";
-				if (this.action === 1) { void this.confirm(); return; }
-				if (this.action === 2) return this.finish("adjust");
-				if (this.action === 3) return this.finish("cancelled");
-			}
-		} else if (data === "c") { this.stage = "confirm"; this.action = 1; this.messageScroll.scrollToStart(); }
+		else if (data === "c") { void this.confirm(); return; }
+		else if (data === "a") return this.finish("adjust");
 		else if (data === "m") { this.messageView = !this.messageView; this.pathView = false; this.messageScroll.scrollToStart(); }
 		else if (data === "p") { this.pathView = !this.pathView; this.messageView = false; this.messageScroll.scrollToStart(); }
 		else if (data === "/") this.filtering = true;
@@ -176,18 +162,14 @@ export class ReviewUI implements Component {
 	}
 	render(width: number): string[] {
 		this.width = Math.max(1, width);
-		const fullMessage = this.stage === "confirm" || this.messageView || this.pathView;
+		const fullMessage = this.messageView || this.pathView;
 		const fit = (text: string) => truncateToWidth(text, this.width);
-		const options = ["返回审阅", "确认提交", "调整范围或信息", "取消"];
-		const controls = this.stage === "confirm" ? [
-			...(this.width < 90 ? options.map((option, i) => `${i === this.action ? "›" : " "}[${option}]`) : [options.map((option, i) => `${i === this.action ? "›" : " "}[${option}]`).join("  ")]),
-			`Enter ${options[this.action]} · Esc 返回审阅`,
-			"←→ / Tab 选择操作 · PgUp/PgDn 浏览信息 · Ctrl+C 取消",
-		] : this.filtering ? ["Enter 完成筛选 · Esc 清空筛选 · Ctrl+C 取消"] : this.pathView || this.messageView ? [
+		const controls = this.filtering ? ["Enter 完成筛选 · Esc 清空筛选 · Ctrl+C 取消"] : this.pathView || this.messageView ? [
 			`${this.pathView ? "p" : "m"} / Esc 返回 · ↑↓ / PgUp/PgDn 浏览${this.pathView ? "路径" : "信息"}`,
-			"c 继续确认 · Ctrl+C 取消",
+			"c 确认 · a 调整 · Ctrl+C 取消",
 		] : [
-			"c 继续确认 · p 完整路径 · m 提交信息",
+			"c 确认提交 · a 调整范围或信息",
+			"p 完整路径 · m 提交信息",
 			`Tab 切换区域 · Enter ${this.pane === "files" ? "查看差异" : "返回文件列表"} · / 筛选`,
 			"↑↓ / PgUp/PgDn 浏览 · ←→ 横移",
 			"Home/End 首尾 · [ / ] 改动块 · w 折行",
@@ -207,9 +189,8 @@ export class ReviewUI implements Component {
 		this.filter.focused = this.focused && this.filtering;
 		if (fullMessage) {
 			const inner = Math.max(1, this.width - 2);
-			const showPath = this.pathView && this.stage !== "confirm";
-			const content = wrapTextWithAnsi(showPath ? path : safeText(this.message), inner);
-			lines.push(...this.frame(this.stage === "confirm" ? "确认提交 · 完整提交信息" : showPath ? "完整文件路径 · p 返回" : "完整提交信息", this.viewport(content, this.messageScroll, inner), this.width, true));
+			const content = wrapTextWithAnsi(this.pathView ? path : safeText(this.message), inner);
+			lines.push(...this.frame(this.pathView ? "完整文件路径 · p 返回" : "完整提交信息", this.viewport(content, this.messageScroll, inner), this.width, true));
 		} else {
 			const listWidth = this.width < 90 ? this.width : Math.min(38, Math.floor(this.width / 3));
 			const list = this.tree(files, Math.max(1, listWidth - 2));
@@ -228,7 +209,7 @@ export class ReviewUI implements Component {
 			}
 		}
 		const error = this.error || (page?.error ? labelText(page.error) : "");
-		const position = fullMessage ? `${this.pathView && this.stage !== "confirm" ? "路径" : "信息"}行 ${this.messageScroll.scrollTop + 1} · ` : page?.lines ? `差异行 ${page.scroll.scrollTop + 1}/${this.diffLines(page, this.diffWidth()).length} · ` : "";
+		const position = fullMessage ? `${this.pathView ? "路径" : "信息"}行 ${this.messageScroll.scrollTop + 1} · ` : page?.lines ? `差异行 ${page.scroll.scrollTop + 1}/${this.diffLines(page, this.diffWidth()).length} · ` : "";
 		const status = error || (this.busy ? "正在校验暂存快照…" : `${position}暂存区外 ${this.snapshot.outside} 个文件未包含`);
 		lines.push(this.filtering ? this.filter.render(this.width)[0] : fit(this.theme.fg(error ? "error" : "muted", status)));
 		const rows = Math.max(1, this.rows());
