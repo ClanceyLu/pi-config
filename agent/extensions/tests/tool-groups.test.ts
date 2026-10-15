@@ -213,7 +213,7 @@ test("native chat render and mouse routing, keyboard commands, execution updates
 	assert.deepEqual(h.chat.render(120), ["read: compact", "codemode: full result"]);
 });
 
-test("finished calls remain visible for exactly 300ms independently, even after agent end", (t) => {
+test("finished calls remain visible for exactly 1000ms independently, even after agent end", (t) => {
 	t.mock.timers.enable({ apis: ["setTimeout"] });
 	const h = harness();
 	h.chat.addChild(row("read"));
@@ -225,7 +225,7 @@ test("finished calls remain visible for exactly 300ms independently, even after 
 	h.emit("tool_execution_end", { toolCallId: "bash" });
 	h.emit("agent_end");
 	assert.doesNotMatch(h.chat.render(120)[1], /执行中/);
-	t.mock.timers.tick(199);
+	t.mock.timers.tick(899);
 	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact", "bash: compact"]);
 	const before = h.repaints();
 	t.mock.timers.tick(1);
@@ -244,7 +244,7 @@ test("delay expiry preserves manual expansion and restarting a call cancels its 
 	h.emit("tool_execution_start", { toolCallId: "read" });
 	h.emit("tool_execution_end", { toolCallId: "read" });
 	await h.command("expand");
-	t.mock.timers.tick(300);
+	t.mock.timers.tick(1000);
 	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
 	await h.command("collapse");
 	assert.equal(h.chat.render(120).length, 2);
@@ -252,7 +252,7 @@ test("delay expiry preserves manual expansion and restarting a call cancels its 
 	h.emit("tool_execution_end", { toolCallId: "read" });
 	t.mock.timers.tick(100);
 	h.emit("tool_execution_start", { toolCallId: "read" });
-	t.mock.timers.tick(300);
+	t.mock.timers.tick(1000);
 	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
 	assert.match(h.chat.render(120)[1], /1 执行中/);
 	h.emit("session_shutdown");
@@ -268,7 +268,7 @@ test("reload, shutdown and widget disposal cancel pending collapse timers", (t) 
 		h.emit("tool_execution_end", { toolCallId: "read" });
 		if (cleanup === "dispose") h.widgets[0].dispose?.(); else h.emit(cleanup);
 		const before = h.repaints();
-		t.mock.timers.tick(300);
+		t.mock.timers.tick(1000);
 		assert.equal(h.repaints(), before, cleanup);
 		if (cleanup === "session_start") assert.equal(h.chat.render(120).length, 2);
 		h.emit("session_shutdown");

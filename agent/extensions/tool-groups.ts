@@ -118,7 +118,7 @@ export default function toolGroups(pi: ExtensionAPI) {
 			timers.delete(event.toolCallId);
 			visible.delete(event.toolCallId);
 			repaint?.();
-		}, 300));
+		}, 1000));
 		repaint?.();
 	});
 	pi.on("agent_end", () => {
