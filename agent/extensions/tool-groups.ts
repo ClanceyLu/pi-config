@@ -29,8 +29,8 @@ function isThinkingOnly(child: Component): boolean {
 	return !message?.content?.some((block) => block.type === "text" && block.text?.trim());
 }
 
-/** Group tool rows across spacers and thinking, never across visible messages or notices. */
-export function groupTools(children: readonly Component[], makeGroup: (rows: ToolRow[], members: Component[]) => Component): Component[] {
+/** Group finished tools across spacers and thinking, never across active tools or visible messages. */
+export function groupTools(children: readonly Component[], makeGroup: (rows: ToolRow[], members: Component[]) => Component, running?: ReadonlySet<string>): Component[] {
 	const output: Component[] = [];
 	let rows: ToolRow[] = [], members: Component[] = [], pending: Component[] = [];
 	const flush = () => {
@@ -39,7 +39,7 @@ export function groupTools(children: readonly Component[], makeGroup: (rows: Too
 		rows = []; members = []; pending = [];
 	};
 	for (const child of children) {
-		if (isTool(child)) {
+		if (isTool(child) && !running?.has(child.toolCallId) && child.result && !child.isPartial) {
 			rows.push(child);
 			members.push(...pending, child);
 			pending = [];
@@ -55,24 +55,17 @@ export function groupTools(children: readonly Component[], makeGroup: (rows: Too
 }
 
 export class ToolGroup extends Container {
-	constructor(rows: ToolRow[], members: Component[], state: { expanded: boolean }, theme: Theme, running: ReadonlySet<string>, repaint: () => void, visible: ReadonlySet<string> = running) {
+	constructor(rows: ToolRow[], members: Component[], state: { expanded: boolean }, theme: Theme, repaint: () => void) {
 		super();
 		this.addChild({
 			invalidate() {},
 			render(width) {
 				const counts = new Map<string, number>();
-				let failed = 0, active = 0, incomplete = 0;
 				for (const row of rows) {
 					counts.set(row.toolName, (counts.get(row.toolName) ?? 0) + 1);
-					if (running.has(row.toolCallId)) active++;
-					else if (!row.result || row.isPartial) incomplete++;
-					else if (row.result.isError) failed++;
 				}
 				const tools = [...counts].map(([name, count]) => `${name} ${count}`).join(" · ");
 				let label = `${state.expanded ? "▾" : "▸"} 工具 ${rows.length} · ${tools}`;
-				if (active) label += ` · ${active} 执行中`;
-				if (failed) label += ` · ${failed} 失败`;
-				if (incomplete) label += ` · ${incomplete} 未完成`;
 				label += state.expanded ? " （收起）" : " （展开）";
 				return ["", truncateToWidth(theme.fg("muted", label), width)];
 			},
@@ -85,7 +78,6 @@ export class ToolGroup extends Container {
 		});
 		// Opening a group reveals existing Compact rows without opening their results.
 		if (state.expanded) for (const member of members) this.addChild(member);
-		else for (const row of rows) if (visible.has(row.toolCallId)) this.addChild(row);
 	}
 }
 
@@ -97,32 +89,20 @@ function isSilent(): boolean {
 export default function toolGroups(pi: ExtensionAPI) {
 	let enabled = true, expanded = false;
 	let states = new WeakMap<ToolRow, { expanded: boolean }>();
-	const running = new Set<string>(), visible = new Set<string>();
-	const timers = new Map<string, ReturnType<typeof setTimeout>>();
+	const running = new Set<string>();
 	let detach: (() => void) | undefined;
 	let repaint: (() => void) | undefined;
-	const clearExecution = () => {
-		for (const timer of timers.values()) clearTimeout(timer);
-		timers.clear(); running.clear(); visible.clear();
-	};
+	const clearExecution = () => running.clear();
 
 	pi.on("tool_execution_start", (event) => {
 		if (event.parentToolCallId || !repaint) return;
-		clearTimeout(timers.get(event.toolCallId));
-		timers.delete(event.toolCallId);
-		running.add(event.toolCallId); visible.add(event.toolCallId); repaint();
+		running.add(event.toolCallId); repaint();
 	});
 	pi.on("tool_execution_end", (event) => {
 		if (!running.delete(event.toolCallId)) return;
-		timers.set(event.toolCallId, setTimeout(() => {
-			timers.delete(event.toolCallId);
-			visible.delete(event.toolCallId);
-			repaint?.();
-		}, 1000));
 		repaint?.();
 	});
 	pi.on("agent_end", () => {
-		for (const id of running) visible.delete(id);
 		running.clear(); repaint?.();
 	});
 	pi.on("session_shutdown", () => { detach?.(); detach = undefined; repaint = undefined; clearExecution(); });
@@ -158,8 +138,8 @@ export default function toolGroups(pi: ExtensionAPI) {
 				chat.children = groupTools(original, (rows, members) => {
 					let state = states.get(rows[0]);
 					if (!state) { state = { expanded }; states.set(rows[0], state); }
-					return new ToolGroup(rows, members, state, ctx.ui.theme, running, repaint!, visible);
-				});
+					return new ToolGroup(rows, members, state, ctx.ui.theme, repaint!);
+				}, running);
 				try { return render(); } finally { chat.children = original; }
 			};
 			hook.draw = draw;

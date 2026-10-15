@@ -58,7 +58,7 @@ test("two independent expansion levels preserve original compact rows and their 
 	const rows = [read, code];
 	const state = { expanded: false };
 	let repaints = 0;
-	const build = () => new ToolGroup(rows, rows, state, theme, new Set(), () => repaints++);
+	const build = () => new ToolGroup(rows, rows, state, theme, () => repaints++);
 	let group = build();
 	assert.deepEqual(group.render(120), ["", "▸ 工具 2 · read 1 · codemode 1 （展开）"]);
 	assert.equal(read.renders, 0, "folded results are not rendered");
@@ -84,7 +84,7 @@ test("single-line summary keeps ANSI styling within narrow widths and truncates 
 		fg: (_color: string, text: string) => `\x1b[90m${text}\x1b[39m`,
 	} as Theme;
 	const rows = [row("一个很长的工具名称_".repeat(20))];
-	const group = new ToolGroup(rows, rows, { expanded: false }, styled, new Set(), () => {});
+	const group = new ToolGroup(rows, rows, { expanded: false }, styled, () => {});
 	for (const width of [0, 1, 2, 5, 10, 20, 80]) {
 		const lines = group.render(width);
 		assert.equal(lines.length, 2);
@@ -94,51 +94,36 @@ test("single-line summary keeps ANSI styling within narrow widths and truncates 
 	assert.match(group.render(80)[1], /▸ 工具 1/);
 });
 
-test("folded groups show only active calls, then hide each finished call without changing manual expansion", () => {
-	const read = row("read"), bash = row("bash"), done = row("edit");
-	const rows = [done, read, bash];
-	const members = [done, new Spacer(1), thinking(), read, bash];
-	const running = new Set([read.toolCallId, bash.toolCallId]);
-	const state = { expanded: false };
-	const build = () => new ToolGroup(rows, members, state, theme, running, () => {});
-	assert.deepEqual(build().render(120).slice(2), ["read: compact", "bash: compact"]);
-	assert.equal(done.renders, 0);
-	running.delete(read.toolCallId);
-	read.result = { isError: true };
-	assert.deepEqual(build().render(120).slice(2), ["bash: compact"]);
-	running.clear();
-	assert.equal(build().render(120).length, 2);
-	assert.equal(state.expanded, false);
-	state.expanded = true;
-	assert.match(build().render(120).join("\n"), /edit: compact/);
-	running.add(read.toolCallId);
-	assert.equal(build().render(120).filter((line) => line === "read: compact").length, 1);
-	running.clear();
-	assert.match(build().render(120).join("\n"), /read: compact/);
+test("active, partial and restored unfinished calls stay outside groups and preserve order", () => {
+	const done = row("edit"), active = row("read"), partial = row("bash"), restored = row("codemode");
+	partial.isPartial = true;
+	restored.result = undefined;
+	const running = new Set([active.toolCallId]);
+	const spacer = new Spacer(1), thought = thinking();
+	const marker = new Text("finished group");
+	const input = [done, spacer, thought, active, partial, restored, row("write")];
+	const groups: ToolRow[][] = [];
+	const result = groupTools(input, (rows) => { groups.push(rows); return marker; }, running);
+	assert.deepEqual(result, [marker, spacer, thought, active, partial, restored, marker]);
+	assert.deepEqual(groups.map((rows) => rows.map((r) => r.toolName)), [["edit"], ["write"]]);
+	assert.deepEqual(groupTools([active], () => marker, running), [active], "running-only transcript has no summary");
 });
 
-test("summary keeps running, failed and incomplete calls visible, including restored calls without results", () => {
-	const read = row("read"), bash = row("bash"), code = row("codemode");
-	read.result = undefined;
+test("finished summary shows only tool counts, including when a call failed", () => {
+	const read = row("read"), bash = row("bash");
 	bash.result = { isError: true };
-	code.result = undefined;
-	const running = new Set([read.toolCallId]);
-	const rows = [read, bash, code];
+	const rows = [read, bash];
 	const colors: string[] = [];
 	const paint = { ...theme, fg: (color: string, text: string) => { colors.push(color); return text; } } as Theme;
 	const state = { expanded: false };
-	const group = new ToolGroup(rows, rows, state, paint, running, () => {});
-	assert.equal(group.render(120)[1], "▸ 工具 3 · read 1 · bash 1 · codemode 1 · 1 执行中 · 1 失败 · 1 未完成 （展开）");
-	running.clear();
-	assert.match(group.render(120)[1], /1 失败 · 2 未完成/);
-	assert.doesNotMatch(group.render(120)[1], /执行中|\x1b/);
+	const group = new ToolGroup(rows, rows, state, paint, () => {});
+	assert.equal(group.render(120)[1], "▸ 工具 2 · read 1 · bash 1 （展开）");
+	assert.doesNotMatch(group.render(120)[1], /失败|执行中|运行中|未完成|\x1b/);
 	state.expanded = true;
-	assert.match(group.render(120)[1], /^▾ 工具 3.*（收起）$/);
-	state.expanded = false;
-	for (const call of rows) call.result = { isError: false };
-	assert.equal(group.render(120)[1], "▸ 工具 3 · read 1 · bash 1 · codemode 1 （展开）");
+	assert.match(group.render(120)[1], /^▾ 工具 2.*（收起）$/);
+	assert.deepEqual(new ToolGroup(rows, rows, state, paint, () => {}).render(120).slice(2), ["read: compact", "bash: compact"]);
 	assert.ok(colors.length > 0);
-	assert.ok(colors.every((color) => color === "muted"), "all summary statuses use non-emphasis styling");
+	assert.ok(colors.every((color) => color === "muted"));
 });
 
 function harness() {
@@ -178,25 +163,26 @@ test("native chat render and mouse routing, keyboard commands, execution updates
 	assert.equal(h.repaints(), beforeStart + 1);
 	h.emit("tool_execution_start", { toolCallId: "codemode/1", parentToolCallId: "codemode" });
 	assert.equal(h.repaints(), beforeStart + 1, "nested calls do not request a group repaint");
-	assert.match(h.chat.render(120)[1], /1 执行中/);
-	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
+	assert.equal(h.chat.render(120)[0], "read: compact");
+	assert.doesNotMatch(h.chat.render(120).join("\n"), /执行中|运行中/);
 	assert.equal(h.chat.children, originalChildren);
-	h.chat.handleMouse(click(1));
+	h.chat.handleMouse(click(2));
 	assert.match(h.chat.render(120).join("\n"), /codemode: compact/);
 	h.chat.handleMouse(click(3));
 	assert.equal(code.expanded, true);
 	await h.command("collapse");
-	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
+	assert.equal(h.chat.render(120)[0], "read: compact");
 	const beforeEnd = h.repaints();
+	read.result = { isError: false };
 	h.emit("tool_execution_end", { toolCallId: "read" });
 	assert.equal(h.repaints(), beforeEnd + 1);
-	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
+	assert.equal(h.chat.render(120).length, 2);
 	assert.doesNotMatch(h.chat.render(120)[1], /执行中/);
 	await h.command("expand");
 	assert.match(h.chat.render(120).join("\n"), /codemode: full result/);
 	h.emit("tool_execution_end", { toolCallId: "read" });
 	read.result = { isError: true };
-	assert.match(h.chat.render(120)[1], /1 失败/);
+	assert.doesNotMatch(h.chat.render(120)[1], /失败/);
 	h.emit("agent_end");
 	assert.ok(h.repaints() > 0);
 	await h.command("off");
@@ -213,64 +199,51 @@ test("native chat render and mouse routing, keyboard commands, execution updates
 	assert.deepEqual(h.chat.render(120), ["read: compact", "codemode: full result"]);
 });
 
-test("finished calls remain visible for exactly 1000ms independently, even after agent end", (t) => {
-	t.mock.timers.enable({ apis: ["setTimeout"] });
+test("each finished call folds immediately while other calls remain outside the summary", () => {
 	const h = harness();
 	h.chat.addChild(row("read"));
 	h.chat.addChild(row("bash"));
 	h.emit("session_start");
 	for (const toolCallId of ["read", "bash"]) h.emit("tool_execution_start", { toolCallId });
+	assert.deepEqual(h.chat.render(120), ["read: compact", "bash: compact"]);
 	h.emit("tool_execution_end", { toolCallId: "read" });
-	t.mock.timers.tick(100);
+	assert.deepEqual(h.chat.render(120), ["", "▸ 工具 1 · read 1 （展开）", "bash: compact"]);
 	h.emit("tool_execution_end", { toolCallId: "bash" });
+	assert.deepEqual(h.chat.render(120), ["", "▸ 工具 2 · read 1 · bash 1 （展开）"]);
 	h.emit("agent_end");
-	assert.doesNotMatch(h.chat.render(120)[1], /执行中/);
-	t.mock.timers.tick(899);
-	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact", "bash: compact"]);
-	const before = h.repaints();
-	t.mock.timers.tick(1);
-	assert.equal(h.repaints(), before + 1);
-	assert.deepEqual(h.chat.render(120).slice(2), ["bash: compact"]);
-	t.mock.timers.tick(100);
 	assert.equal(h.chat.render(120).length, 2);
 	h.emit("session_shutdown");
 });
 
-test("delay expiry preserves manual expansion and restarting a call cancels its old timer", async (t) => {
-	t.mock.timers.enable({ apis: ["setTimeout"] });
+test("manual expansion survives completion, and collapse never hides a restarted call", async () => {
 	const h = harness();
 	h.chat.addChild(row("read"));
 	h.emit("session_start");
 	h.emit("tool_execution_start", { toolCallId: "read" });
-	h.emit("tool_execution_end", { toolCallId: "read" });
 	await h.command("expand");
-	t.mock.timers.tick(1000);
+	h.emit("tool_execution_end", { toolCallId: "read" });
 	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
 	await h.command("collapse");
 	assert.equal(h.chat.render(120).length, 2);
 	h.emit("tool_execution_start", { toolCallId: "read" });
+	assert.deepEqual(h.chat.render(120), ["read: compact"]);
+	await h.command("collapse");
+	assert.deepEqual(h.chat.render(120), ["read: compact"]);
 	h.emit("tool_execution_end", { toolCallId: "read" });
-	t.mock.timers.tick(100);
-	h.emit("tool_execution_start", { toolCallId: "read" });
-	t.mock.timers.tick(1000);
-	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
-	assert.match(h.chat.render(120)[1], /1 执行中/);
+	assert.equal(h.chat.render(120).length, 2);
 	h.emit("session_shutdown");
 });
 
-test("reload, shutdown and widget disposal cancel pending collapse timers", (t) => {
-	t.mock.timers.enable({ apis: ["setTimeout"] });
+test("reload, shutdown and widget disposal clear active-call tracking", () => {
 	for (const cleanup of ["session_start", "session_shutdown", "dispose"]) {
 		const h = harness();
 		h.chat.addChild(row("read"));
 		h.emit("session_start");
 		h.emit("tool_execution_start", { toolCallId: "read" });
-		h.emit("tool_execution_end", { toolCallId: "read" });
+		assert.deepEqual(h.chat.render(120), ["read: compact"]);
 		if (cleanup === "dispose") h.widgets[0].dispose?.(); else h.emit(cleanup);
-		const before = h.repaints();
-		t.mock.timers.tick(1000);
-		assert.equal(h.repaints(), before, cleanup);
 		if (cleanup === "session_start") assert.equal(h.chat.render(120).length, 2);
+		else assert.deepEqual(h.chat.render(120), ["read: compact"]);
 		h.emit("session_shutdown");
 	}
 });
