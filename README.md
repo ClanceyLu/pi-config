@@ -130,6 +130,12 @@ git diff --cached
 
 分组挂载依赖 Pi 1.2 的内部对话容器结构；升级 Pi 后需要确认兼容性。普通终端模式使用命令展开，全屏模式还支持鼠标点击。
 
+### 提交差异审阅
+
+`agent/extensions/commit-review/` 为 `git-commit-cn` 提供 `commit_review` 工具：左侧文件列表、右侧逐文件 diff，窄终端自动单栏，支持筛选、滚动、改动块跳转与完整提交信息确认。只审阅当前暂存区，不执行暂存、提交或推送；确认时校验暂存快照。
+
+运行 `/reload` 后可由 Skill 调用，或用 `/commit-review fix: 修复问题` 手动浏览。按 `c` 进入最终确认，`Esc` 返回或取消。详见 [提交审阅说明](agent/extensions/commit-review/README.md)。
+
 ### 更新 Pi 和 packages
 
 ```zsh
