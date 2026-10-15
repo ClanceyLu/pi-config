@@ -105,7 +105,7 @@ export class ReviewUI implements Component {
 			if (this.stage === "confirm") this.stage = "review";
 			else if (this.pathView) this.pathView = false;
 			else if (this.messageView) this.messageView = false;
-			else if (this.width < 90 && this.pane === "diff") this.pane = "files";
+			else if (this.pane === "diff") this.pane = "files";
 			else return this.finish("cancelled");
 		} else if (this.busy) return;
 		else if (this.stage === "confirm") {
@@ -119,12 +119,12 @@ export class ReviewUI implements Component {
 				if (this.action === 2) return this.finish("adjust");
 				if (this.action === 3) return this.finish("cancelled");
 			}
-		} else if (data === "c") { this.stage = "confirm"; this.action = 0; this.messageScroll.scrollToStart(); }
+		} else if (data === "c") { this.stage = "confirm"; this.action = 1; this.messageScroll.scrollToStart(); }
 		else if (data === "m") { this.messageView = !this.messageView; this.pathView = false; this.messageScroll.scrollToStart(); }
 		else if (data === "p") { this.pathView = !this.pathView; this.messageView = false; this.messageScroll.scrollToStart(); }
 		else if (data === "/") this.filtering = true;
 		else if (matchesKey(data, "tab") || matchesKey(data, "shift+tab")) this.pane = this.pane === "files" ? "diff" : "files";
-		else if (matchesKey(data, "enter") && this.pane === "files") this.pane = "diff";
+		else if (matchesKey(data, "enter") && !this.messageView && !this.pathView) this.pane = this.pane === "files" ? "diff" : "files";
 		else if (data === "w") { this.wrap = !this.wrap; this.page()?.scroll.scrollToStart(); }
 		else {
 			const step = this.pane === "diff" && !this.messageView && !this.pathView ? this.diffHeight : this.height;
@@ -177,9 +177,25 @@ export class ReviewUI implements Component {
 	render(width: number): string[] {
 		this.width = Math.max(1, width);
 		const fullMessage = this.stage === "confirm" || this.messageView || this.pathView;
-		const preview = !fullMessage && this.rows() >= 18;
-		this.height = Math.max(1, this.rows() - (preview ? 12 : 7));
 		const fit = (text: string) => truncateToWidth(text, this.width);
+		const options = ["返回审阅", "确认提交", "调整范围或信息", "取消"];
+		const controls = this.stage === "confirm" ? [
+			...(this.width < 90 ? options.map((option, i) => `${i === this.action ? "›" : " "}[${option}]`) : [options.map((option, i) => `${i === this.action ? "›" : " "}[${option}]`).join("  ")]),
+			`Enter ${options[this.action]} · Esc 返回审阅`,
+			"←→ / Tab 选择操作 · PgUp/PgDn 浏览信息 · Ctrl+C 取消",
+		] : this.filtering ? ["Enter 完成筛选 · Esc 清空筛选 · Ctrl+C 取消"] : this.pathView || this.messageView ? [
+			`${this.pathView ? "p" : "m"} / Esc 返回 · ↑↓ / PgUp/PgDn 浏览${this.pathView ? "路径" : "信息"}`,
+			"c 继续确认 · Ctrl+C 取消",
+		] : [
+			"c 继续确认 · p 完整路径 · m 提交信息",
+			`Tab 切换区域 · Enter ${this.pane === "files" ? "查看差异" : "返回文件列表"} · / 筛选`,
+			"↑↓ / PgUp/PgDn 浏览 · ←→ 横移",
+			"Home/End 首尾 · [ / ] 改动块 · w 折行",
+			`Esc ${this.pane === "diff" ? "返回文件列表" : "取消审阅"} · Ctrl+C 取消`,
+		];
+		const footer = [fit(this.theme.fg("accent", "操作")), ...controls.flatMap((line) => wrapTextWithAnsi(line, this.width)).map((line) => fit(this.theme.fg("muted", line)))];
+		const preview = !fullMessage && this.rows() - footer.length >= 14;
+		this.height = Math.max(1, this.rows() - (preview ? 10 : 5) - footer.length);
 		const files = this.files();
 		const file = this.current();
 		const page = this.page();
@@ -215,11 +231,7 @@ export class ReviewUI implements Component {
 		const position = fullMessage ? `${this.pathView && this.stage !== "confirm" ? "路径" : "信息"}行 ${this.messageScroll.scrollTop + 1} · ` : page?.lines ? `差异行 ${page.scroll.scrollTop + 1}/${this.diffLines(page, this.diffWidth()).length} · ` : "";
 		const status = error || (this.busy ? "正在校验暂存快照…" : `${position}暂存区外 ${this.snapshot.outside} 个文件未包含`);
 		lines.push(this.filtering ? this.filter.render(this.width)[0] : fit(this.theme.fg(error ? "error" : "muted", status)));
-		if (this.stage === "confirm") {
-			const options = ["返回审阅", "确认提交", "调整范围或信息", "取消"];
-			lines.push(fit(this.width < 90 ? `›[${options[this.action]}] ${this.action + 1}/${options.length}` : options.map((o, i) => `${i === this.action ? "›" : " "}[${o}]`).join(" ")));
-		} else lines.push(fit(this.theme.fg("accent", "c 继续确认 · p 完整路径 · m 提交信息 · / 筛选 · Esc 返回/取消")));
-		lines.push(fit(this.stage === "confirm" ? "←→ 选择 · PgUp/PgDn 浏览信息 · Enter 执行 · Esc 返回" : this.pathView ? "↑↓/PgUp/PgDn 浏览路径 · p 返回" : this.messageView ? "↑↓/PgUp/PgDn 浏览信息 · m 返回差异" : "Tab 切换区域 · ↑↓/PgUp/PgDn 浏览 · ←→ 横移 · [/] 改动块 · w 折行"));
-		return lines.slice(0, Math.max(1, this.rows()));
+		const rows = Math.max(1, this.rows());
+		return lines.slice(0, Math.max(0, rows - footer.length)).concat(footer.slice(0, rows));
 	}
 }
