@@ -118,6 +118,17 @@ git diff --cached
 
 `agent/extensions/compact-footer.ts` 精简底部模型显示：隐藏 provider，自动路由后仅显示实际模型，如 `gpt-6.1-sol · medium`（路由前显示 `auto`），思考等级实时显示当前选择值（包括快捷键切换），不使用上次回复的等级。目录、分支、上下文使用百分比与模型合并为一行，目录信息最多占终端宽度的三分之一，不显示 Token 数、缓存统计和费用；其他扩展状态仍会显示；完整模型信息可通过 `/model` 查看。
 
+### 工具分组
+
+`agent/extensions/tool-groups.ts` 在 `pi-compact-tools` 的 Compact 工具行外增加一层分组，支持 `read`、`bash`、`codemode` 及其他工具，不修改执行或会话记录。
+
+- 运行 `/reload` 加载；选择 `/compact-tools compact`，并用 `/silent off` 显示工具。
+- 默认显示调用数量及执行中、失败、未完成状态；点击摘要展开为原来的 Compact 行，再点击工具行查看详情。收起分组不会重置工具行的展开状态。
+- 键盘操作：`/tool-groups expand` 展开所有分组，`/tool-groups collapse` 收起；工具详情仍可用 `Ctrl+O` 切换。`/tool-groups off` 关闭分组，`on` 恢复。
+- 连续工具调用可跨纯思考内容合并，正文、提示和最终回复不隐藏。Silent 开启时不显示分组；`codemode` 的内部调用仍由原插件显示摘要，不创建额外工具行。
+
+分组挂载依赖 Pi 1.2 的内部对话容器结构；升级 Pi 后需要确认兼容性。普通终端模式使用命令展开，全屏模式还支持鼠标点击。
+
 ### 更新 Pi 和 packages
 
 ```zsh
