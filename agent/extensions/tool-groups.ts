@@ -1,5 +1,5 @@
 import { AssistantMessageComponent, ToolExecutionComponent, type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, truncateToWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Container, Spacer, stripTerminalSequences, truncateToWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
 
 export interface ToolRow extends Component {
 	toolName: string;
@@ -61,12 +61,9 @@ export class ToolGroup extends Container {
 			invalidate() {},
 			render(width) {
 				const counts = new Map<string, number>();
-				for (const row of rows) {
-					counts.set(row.toolName, (counts.get(row.toolName) ?? 0) + 1);
-				}
+				for (const row of rows) counts.set(row.toolName, (counts.get(row.toolName) ?? 0) + 1);
 				const tools = [...counts].map(([name, count]) => `${name} ${count}`).join(" · ");
-				let label = `${state.expanded ? "▾" : "▸"} 工具 ${rows.length} · ${tools}`;
-				label += state.expanded ? " （收起）" : " （展开）";
+				const label = ` ⦁ ${tools}`;
 				return ["", truncateToWidth(theme.fg("muted", label), width)];
 			},
 			handleMouse(event: TuiMouseEvent) {
@@ -77,7 +74,26 @@ export class ToolGroup extends Container {
 			},
 		});
 		// Opening a group reveals existing Compact rows without opening their results.
-		if (state.expanded) for (const member of members) this.addChild(member);
+		if (state.expanded) for (const member of members) {
+			const content = new Container();
+			content.addChild(member);
+			const last = member === rows.at(-1);
+			this.addChild({
+				invalidate() { content.invalidate(); },
+				render(width) {
+					const lines = content.render(Math.max(1, width - 3));
+					const start = isTool(member) ? lines.findIndex((line) => stripTerminalSequences(line).trim()) : -1;
+					return lines.map((line, i) => {
+						const prefix = i === start ? last ? " └ " : " ├ " : last && start >= 0 && i > start ? "   " : " │ ";
+						return truncateToWidth(theme.fg("muted", prefix) + line, width);
+					});
+				},
+				handleMouse(event) {
+					if (event.x < 3 || event.width <= 3) return;
+					return content.handleMouse({ ...event, x: event.x - 3, width: event.width - 3 });
+				},
+			});
+		}
 	}
 }
 
@@ -89,22 +105,31 @@ function isSilent(): boolean {
 export default function toolGroups(pi: ExtensionAPI) {
 	let enabled = true, expanded = false;
 	let states = new WeakMap<ToolRow, { expanded: boolean }>();
-	const running = new Set<string>();
+	const unfolded = new Set<string>();
+	const timers = new Map<string, ReturnType<typeof setTimeout>>();
 	let detach: (() => void) | undefined;
 	let repaint: (() => void) | undefined;
-	const clearExecution = () => running.clear();
+	const clearExecution = () => {
+		for (const timer of timers.values()) clearTimeout(timer);
+		timers.clear(); unfolded.clear();
+	};
 
 	pi.on("tool_execution_start", (event) => {
 		if (event.parentToolCallId || !repaint) return;
-		running.add(event.toolCallId); repaint();
+		clearTimeout(timers.get(event.toolCallId));
+		timers.delete(event.toolCallId);
+		unfolded.add(event.toolCallId); repaint();
 	});
 	pi.on("tool_execution_end", (event) => {
-		if (!running.delete(event.toolCallId)) return;
+		if (!unfolded.has(event.toolCallId) || timers.has(event.toolCallId)) return;
+		timers.set(event.toolCallId, setTimeout(() => {
+			timers.delete(event.toolCallId);
+			unfolded.delete(event.toolCallId);
+			repaint?.();
+		}, 1000));
 		repaint?.();
 	});
-	pi.on("agent_end", () => {
-		running.clear(); repaint?.();
-	});
+	pi.on("agent_end", () => { repaint?.(); });
 	pi.on("session_shutdown", () => { detach?.(); detach = undefined; repaint = undefined; clearExecution(); });
 	pi.on("session_start", (_event, ctx) => {
 		detach?.();
@@ -139,7 +164,7 @@ export default function toolGroups(pi: ExtensionAPI) {
 					let state = states.get(rows[0]);
 					if (!state) { state = { expanded }; states.set(rows[0], state); }
 					return new ToolGroup(rows, members, state, ctx.ui.theme, repaint!);
-				}, running);
+				}, unfolded);
 				try { return render(); } finally { chat.children = original; }
 			};
 			hook.draw = draw;

@@ -5,7 +5,7 @@ import { Container, Spacer, Text, visibleWidth, type Component, type TuiMouseEve
 import toolGroups, { groupTools, ToolGroup, type ToolRow } from "../tool-groups.ts";
 
 const theme = { fg: (_color: string, text: string) => text } as Theme;
-const click = (y: number, height = 10) => ({ type: "click", button: "left", x: 0, y, width: 120, height } as TuiMouseEvent);
+const click = (y: number, height = 10) => ({ type: "click", button: "left", x: 3, y, width: 120, height } as TuiMouseEvent);
 
 function row(name: string, id = name) {
 	return Object.assign(Object.create(ToolExecutionComponent.prototype), {
@@ -60,14 +60,14 @@ test("two independent expansion levels preserve original compact rows and their 
 	let repaints = 0;
 	const build = () => new ToolGroup(rows, rows, state, theme, () => repaints++);
 	let group = build();
-	assert.deepEqual(group.render(120), ["", "▸ 工具 2 · read 1 · codemode 1 （展开）"]);
+	assert.deepEqual(group.render(120), ["", " ⦁ read 1 · codemode 1"]);
 	assert.equal(read.renders, 0, "folded results are not rendered");
 	assert.equal(group.handleMouse(click(0, 2)), undefined, "blank separator is not clickable");
 	assert.equal(state.expanded, false);
 	assert.equal(group.handleMouse(click(1))?.handled, true);
 	assert.equal(repaints, 1);
 	group = build();
-	assert.deepEqual(group.render(120).slice(2), ["read: compact", "codemode: compact"]);
+	assert.deepEqual(group.render(120), ["", " ⦁ read 1 · codemode 1", " ├ read: compact", " └ codemode: compact"]);
 	assert.equal(read.expanded, false, "opening the outer group does not open tool details");
 	group.handleMouse(click(2));
 	assert.equal(read.expanded, true);
@@ -91,7 +91,33 @@ test("single-line summary keeps ANSI styling within narrow widths and truncates 
 		for (const line of lines) assert.ok(visibleWidth(line) <= width);
 	}
 	assert.equal(group.render(80)[0], "");
-	assert.match(group.render(80)[1], /▸ 工具 1/);
+	assert.match(group.render(80)[1], / ⦁ 一个很长的工具名称_/);
+});
+
+test("expanded rail stays connected through multiline tools and spacers with correct mouse coordinates", () => {
+	const read = row("read"), bash = row("bash");
+	let received: TuiMouseEvent | undefined;
+	let renderedWidth = 0;
+	read.render = (width: number) => { renderedWidth = width; return ["• read", " │ output", " └ Done"]; };
+	read.handleMouse = (event: TuiMouseEvent) => { received = event; return { handled: true }; };
+	const group = new ToolGroup([read, bash], [read, new Spacer(1), thinking(), bash], { expanded: true }, theme, () => {});
+	assert.deepEqual(group.render(40), ["", " ⦁ read 1 · bash 1", " ├ • read", " │  │ output", " │  └ Done", " │ ", " └ bash: compact"]);
+	assert.equal(renderedWidth, 37);
+	assert.equal(group.handleMouse({ ...click(3), x: 1, width: 40 }), undefined, "rail is not a tool click");
+	assert.equal(group.handleMouse({ ...click(3), x: 8, width: 40 })?.handled, true);
+	assert.equal(received?.x, 5);
+	assert.equal(received?.y, 1);
+	assert.equal(received?.width, 37);
+	for (const width of [0, 1, 2, 3, 5, 20, 80]) {
+		assert.ok(group.render(width).every((line) => visibleWidth(line) <= width));
+	}
+});
+
+test("single codemode branch points at its header, not around its output", () => {
+	const code = row("codemode");
+	code.render = () => ["", "\x1b[90m   \x1b[0m", "⦁ codemode text(...)", " │ result", " └ Done", ""];
+	const group = new ToolGroup([code], [code], { expanded: true }, theme, () => {});
+	assert.deepEqual(group.render(80), ["", " ⦁ codemode 1", " │ ", " │ \x1b[90m   \x1b[0m", " └ ⦁ codemode text(...)", "    │ result", "    └ Done", "   "]);
 });
 
 test("active, partial and restored unfinished calls stay outside groups and preserve order", () => {
@@ -109,19 +135,20 @@ test("active, partial and restored unfinished calls stay outside groups and pres
 	assert.deepEqual(groupTools([active], () => marker, running), [active], "running-only transcript has no summary");
 });
 
-test("finished summary shows only tool counts, including when a call failed", () => {
+test("finished summary keeps per-tool counts without totals or action labels", () => {
 	const read = row("read"), bash = row("bash");
 	bash.result = { isError: true };
-	const rows = [read, bash];
+	const rows = [read, bash, row("read", "read-2")];
 	const colors: string[] = [];
 	const paint = { ...theme, fg: (color: string, text: string) => { colors.push(color); return text; } } as Theme;
 	const state = { expanded: false };
 	const group = new ToolGroup(rows, rows, state, paint, () => {});
-	assert.equal(group.render(120)[1], "▸ 工具 2 · read 1 · bash 1 （展开）");
-	assert.doesNotMatch(group.render(120)[1], /失败|执行中|运行中|未完成|\x1b/);
+	assert.equal(group.render(120)[1], " ⦁ read 2 · bash 1");
+	assert.doesNotMatch(group.render(120)[1], /工具|展开|收起|失败|执行中|运行中|未完成|\x1b/);
 	state.expanded = true;
-	assert.match(group.render(120)[1], /^▾ 工具 2.*（收起）$/);
-	assert.deepEqual(new ToolGroup(rows, rows, state, paint, () => {}).render(120).slice(2), ["read: compact", "bash: compact"]);
+	const opened = new ToolGroup(rows, rows, state, paint, () => {});
+	assert.match(opened.render(120)[1], /^ ⦁ read 2 · bash 1$/);
+	assert.deepEqual(opened.render(120).slice(2), [" ├ read: compact", " ├ bash: compact", " └ read: compact"]);
 	assert.ok(colors.length > 0);
 	assert.ok(colors.every((color) => color === "muted"));
 });
@@ -149,7 +176,8 @@ function harness() {
 	return { chat, ctx, widgets, notices, tui, emit: (event: string, value = {}) => handlers.get(event)!(value, ctx), command: (args: string) => command!(args, ctx), repaints: () => repaints };
 }
 
-test("native chat render and mouse routing, keyboard commands, execution updates and cleanup", async () => {
+test("native chat render and mouse routing, keyboard commands, execution updates and cleanup", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
 	const h = harness();
 	const read = row("read"), code = row("codemode");
 	read.result = undefined;
@@ -176,6 +204,8 @@ test("native chat render and mouse routing, keyboard commands, execution updates
 	read.result = { isError: false };
 	h.emit("tool_execution_end", { toolCallId: "read" });
 	assert.equal(h.repaints(), beforeEnd + 1);
+	assert.equal(h.chat.render(120)[0], "read: compact");
+	t.mock.timers.tick(1000);
 	assert.equal(h.chat.render(120).length, 2);
 	assert.doesNotMatch(h.chat.render(120)[1], /执行中/);
 	await h.command("expand");
@@ -188,41 +218,53 @@ test("native chat render and mouse routing, keyboard commands, execution updates
 	await h.command("off");
 	assert.deepEqual(h.chat.render(120), ["read: compact", "codemode: full result"]);
 	await h.command("on");
-	assert.match(h.chat.render(120)[1], /工具 2/);
+	assert.match(h.chat.render(120)[1], /read 1 · codemode 1/);
 	await h.command("invalid");
 	assert.match(h.notices.at(-1)!, /用法/);
 	h.emit("session_start");
 	assert.equal(h.chat.render, wrapper, "no wrapper stacking on session reload");
 	h.widgets[0].dispose?.();
-	assert.match(h.chat.render(120)[1], /工具 2/, "old widget disposal does not disable a new binding");
+	assert.match(h.chat.render(120)[1], /read 1 · codemode 1/, "old widget disposal does not disable a new binding");
 	h.emit("session_shutdown");
 	assert.deepEqual(h.chat.render(120), ["read: compact", "codemode: full result"]);
 });
 
-test("each finished call folds immediately while other calls remain outside the summary", () => {
+test("calls stay unfolded while running and fold independently 1000ms after completion", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
 	const h = harness();
 	h.chat.addChild(row("read"));
 	h.chat.addChild(row("bash"));
 	h.emit("session_start");
 	for (const toolCallId of ["read", "bash"]) h.emit("tool_execution_start", { toolCallId });
+	t.mock.timers.tick(3000);
 	assert.deepEqual(h.chat.render(120), ["read: compact", "bash: compact"]);
 	h.emit("tool_execution_end", { toolCallId: "read" });
-	assert.deepEqual(h.chat.render(120), ["", "▸ 工具 1 · read 1 （展开）", "bash: compact"]);
+	t.mock.timers.tick(999);
+	assert.deepEqual(h.chat.render(120), ["read: compact", "bash: compact"]);
+	const before = h.repaints();
+	t.mock.timers.tick(1);
+	assert.equal(h.repaints(), before + 1);
+	assert.deepEqual(h.chat.render(120), ["", " ⦁ read 1", "bash: compact"]);
 	h.emit("tool_execution_end", { toolCallId: "bash" });
-	assert.deepEqual(h.chat.render(120), ["", "▸ 工具 2 · read 1 · bash 1 （展开）"]);
 	h.emit("agent_end");
-	assert.equal(h.chat.render(120).length, 2);
+	t.mock.timers.tick(999);
+	assert.deepEqual(h.chat.render(120), ["", " ⦁ read 1", "bash: compact"]);
+	h.emit("tool_execution_end", { toolCallId: "bash" });
+	t.mock.timers.tick(1);
+	assert.deepEqual(h.chat.render(120), ["", " ⦁ read 1 · bash 1"]);
 	h.emit("session_shutdown");
 });
 
-test("manual expansion survives completion, and collapse never hides a restarted call", async () => {
+test("manual expansion survives delayed folding and restarting cancels the previous timer", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
 	const h = harness();
 	h.chat.addChild(row("read"));
 	h.emit("session_start");
 	h.emit("tool_execution_start", { toolCallId: "read" });
 	await h.command("expand");
 	h.emit("tool_execution_end", { toolCallId: "read" });
-	assert.deepEqual(h.chat.render(120).slice(2), ["read: compact"]);
+	t.mock.timers.tick(1000);
+	assert.deepEqual(h.chat.render(120).slice(2), [" └ read: compact"]);
 	await h.command("collapse");
 	assert.equal(h.chat.render(120).length, 2);
 	h.emit("tool_execution_start", { toolCallId: "read" });
@@ -230,18 +272,29 @@ test("manual expansion survives completion, and collapse never hides a restarted
 	await h.command("collapse");
 	assert.deepEqual(h.chat.render(120), ["read: compact"]);
 	h.emit("tool_execution_end", { toolCallId: "read" });
+	t.mock.timers.tick(100);
+	h.emit("tool_execution_start", { toolCallId: "read" });
+	t.mock.timers.tick(1000);
+	assert.deepEqual(h.chat.render(120), ["read: compact"]);
+	h.emit("tool_execution_end", { toolCallId: "read" });
+	t.mock.timers.tick(1000);
 	assert.equal(h.chat.render(120).length, 2);
 	h.emit("session_shutdown");
 });
 
-test("reload, shutdown and widget disposal clear active-call tracking", () => {
-	for (const cleanup of ["session_start", "session_shutdown", "dispose"]) {
+test("reload, shutdown and widget disposal clear active calls and pending timers", (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	for (const ended of [false, true]) for (const cleanup of ["session_start", "session_shutdown", "dispose"]) {
 		const h = harness();
 		h.chat.addChild(row("read"));
 		h.emit("session_start");
 		h.emit("tool_execution_start", { toolCallId: "read" });
 		assert.deepEqual(h.chat.render(120), ["read: compact"]);
+		if (ended) h.emit("tool_execution_end", { toolCallId: "read" });
 		if (cleanup === "dispose") h.widgets[0].dispose?.(); else h.emit(cleanup);
+		const before = h.repaints();
+		t.mock.timers.tick(1000);
+		assert.equal(h.repaints(), before, cleanup);
 		if (cleanup === "session_start") assert.equal(h.chat.render(120).length, 2);
 		else assert.deepEqual(h.chat.render(120), ["read: compact"]);
 		h.emit("session_shutdown");
@@ -257,8 +310,8 @@ test("new calls join an opened group without changing its expansion state", () =
 	h.chat.addChild(row("bash"));
 	h.chat.addChild(row("codemode"));
 	const lines = h.chat.render(120);
-	assert.equal(lines[1], "▾ 工具 3 · read 1 · bash 1 · codemode 1 （收起）");
-	assert.deepEqual(lines.slice(2), ["read: compact", "bash: compact", "codemode: compact"]);
+	assert.equal(lines[1], " ⦁ read 1 · bash 1 · codemode 1");
+	assert.deepEqual(lines.slice(2), [" ├ read: compact", " ├ bash: compact", " └ codemode: compact"]);
 	h.emit("session_shutdown");
 });
 
@@ -275,7 +328,7 @@ test("render errors restore original children; silent mode does not leak group s
 		h.emit("session_start");
 		assert.deepEqual(h.chat.render(120), ["read: compact"], "silent mode's own renderer remains responsible for hiding rows");
 		global[silentKey].enabled = false;
-		assert.match(h.chat.render(120)[1], /工具 1/);
+		assert.match(h.chat.render(120)[1], / ⦁ read/);
 		read.render = () => { throw new Error("render failed"); };
 		h.command("expand");
 		assert.throws(() => h.chat.render(120), /render failed/);
