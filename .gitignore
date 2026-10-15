@@ -2,12 +2,13 @@
 /*
 !/.gitignore
 !/README.md
+!/shared/
+!/shared/settings.example.json
+!/shared/models.example.json
 !/agent/
 
 /agent/*
 !/agent/AGENTS.md
-!/agent/settings.json
-!/agent/models.json
 !/agent/extensions/
 !/agent/extensions/**
 !/agent/skills/

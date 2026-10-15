@@ -1,13 +1,10 @@
 {
-  "lastChangelogVersion": "1.2.0",
+  "$schema": "https://pi.dev/schemas/settings.schema.json",
   "defaultProvider": "openai-codex",
   "defaultModel": "auto",
   "theme": "light",
   "defaultThinkingLevel": "medium",
-  "defaultTools": [
-    "+codemode",
-    "+tool_search"
-  ],
+  "defaultTools": ["+codemode", "+tool_search"],
   "packages": [
     "npm:@dietrichgebert/ponytail",
     "npm:pi-compact-tools",
@@ -18,5 +15,6 @@
   "showHardwareCursor": false,
   "tuiMode": "fullscreen",
   "quietStartup": true,
-  "extensions": []
+  "skills": ["./local/skills"],
+  "extensions": ["./local/extensions"]
 }
