@@ -82,16 +82,20 @@ test("summary keeps running, failed and incomplete calls visible, including rest
 	read.result = undefined;
 	bash.result = { isError: true };
 	code.result = undefined;
-	const colors: string[] = [];
-	const paint = { fg: (color: string, text: string) => { colors.push(color); return text; } } as Theme;
 	const running = new Set([read.toolCallId]);
 	const rows = [read, bash, code];
+	const colors: string[] = [];
+	const paint = { fg: (color: string, text: string) => { colors.push(color); return text; } } as Theme;
 	const group = new ToolGroup(rows, rows, { expanded: false }, paint, running, () => {});
 	assert.match(group.render(120)[1], /1 执行中 · 1 失败 · 1 未完成/);
-	assert.equal(colors.at(-1), "error");
+	assert.equal(group.render(120)[1], "▸ 工具 3 · read 1 · bash 1 · codemode 1 · 1 执行中 · 1 失败 · 1 未完成 （展开）");
 	running.clear();
 	assert.match(group.render(120)[1], /1 失败 · 2 未完成/);
-	assert.doesNotMatch(group.render(120)[1], /执行中/);
+	assert.doesNotMatch(group.render(120)[1], /执行中|\x1b/);
+	for (const call of rows) call.result = { isError: false };
+	assert.equal(group.render(120)[1], "▸ 工具 3 · read 1 · bash 1 · codemode 1 （展开）");
+	assert.ok(colors.length > 0);
+	assert.ok(colors.every((color) => color === "muted"), "all statuses use the theme's non-emphasis color");
 });
 
 function harness() {
@@ -185,7 +189,8 @@ test("render errors restore original children; silent mode does not leak group s
 		assert.deepEqual(h.chat.render(120), ["read: compact"], "silent mode's own renderer remains responsible for hiding rows");
 		global[silentKey].enabled = false;
 		assert.match(h.chat.render(120)[1], /工具 1/);
-		h.ctx.ui.theme = { fg: () => { throw new Error("render failed"); } } as unknown as Theme;
+		read.render = () => { throw new Error("render failed"); };
+		h.command("expand");
 		assert.throws(() => h.chat.render(120), /render failed/);
 		assert.equal(h.chat.children, children);
 	} finally {

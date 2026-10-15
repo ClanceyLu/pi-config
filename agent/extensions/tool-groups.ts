@@ -74,7 +74,7 @@ export class ToolGroup extends Container {
 				if (failed) label += ` · ${failed} 失败`;
 				if (incomplete) label += ` · ${incomplete} 未完成`;
 				label += state.expanded ? " （收起）" : " （展开）";
-				return ["", truncateToWidth(theme.fg(failed ? "error" : active ? "accent" : incomplete ? "warning" : "muted", label), width)];
+				return ["", truncateToWidth(theme.fg("muted", label), width)];
 			},
 			handleMouse(event: TuiMouseEvent) {
 				if (event.type !== "click" || event.button !== "left" || event.y === 0) return;
