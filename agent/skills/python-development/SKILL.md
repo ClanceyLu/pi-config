@@ -1,5 +1,5 @@
 ---
-name: python-uv
+name: python-development
 description: Use uv to create, configure, synchronize, and run Python project environments. Apply whenever working on a Python project or handling Python versions, virtual environments, dependencies, lockfiles, tests, scripts, or tooling; prefer uv over pip, venv, virtualenv, Poetry, Pipenv, or Conda unless the user or existing project explicitly requires otherwise.
 compatibility: Requires the uv command-line tool, or permission to install it.
 ---

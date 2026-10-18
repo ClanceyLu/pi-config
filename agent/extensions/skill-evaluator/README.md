@@ -12,7 +12,7 @@
 在需要作为测试 workspace 的项目目录中启动 Pi TUI，然后用自然语言说明要评估的 Skill：
 
 ```text
-/skill-eval 评估 python-uv skill
+/skill-eval 评估 python-development skill
 /skill-eval 评估当前项目 ../my-skill 目录里的 Skill
 /skill-eval 评估 https://github.com/owner/repository 中适合当前任务的 Skill
 /skill-eval 阅读 https://example.com/install 文档并评估其中介绍的 Skill

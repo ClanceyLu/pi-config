@@ -1,5 +1,5 @@
 ---
-name: node-pnpm
+name: node-development
 description: Manage Node.js, JavaScript, and TypeScript packages, dependencies, lockfiles, workspaces, and scripts with pnpm. Apply whenever working in a JS/TS project or a repository containing package.json, or when handling dependency install/add/remove/upgrade, node_modules, monorepos, lockfiles, publishing, or any npm, npx, yarn, or bun command. Prefer pnpm over npm, npx, yarn, and bun unless the repository or the user explicitly requires otherwise.
 compatibility: Requires the pnpm command-line tool, or permission to install it.
 ---
