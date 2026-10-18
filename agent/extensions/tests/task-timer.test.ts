@@ -9,7 +9,7 @@ test("elapsed formatting", () => {
 	}
 });
 
-test("timer stays above the editor without changing Thinking, survives retries, and stops on settle or shutdown", async (t) => {
+test("timer excludes prompt waits, survives retries, and stops on settle or shutdown", async (t) => {
 	t.mock.timers.enable({ apis: ["Date", "setInterval"], now: 0 });
 	const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<void>>();
 	let widget: string[] | undefined;
@@ -34,14 +34,28 @@ test("timer stays above the editor without changing Thinking, survives retries, 
 	t.mock.timers.tick(2_000);
 	assert.deepEqual(widget, ["执行中 · 2s"]);
 	await emit("agent_start");
+	await emit("ui_prompt_start");
+	assert.deepEqual(widget, ["等待回答 · 2s"]);
+	t.mock.timers.tick(10_000);
+	assert.deepEqual(widget, ["等待回答 · 2s"]);
+	await emit("agent_start");
+	await emit("ui_prompt_end");
+	assert.deepEqual(widget, ["执行中 · 2s"]);
 	t.mock.timers.tick(1_000);
 	assert.deepEqual(widget, ["执行中 · 3s"]);
+	await emit("ui_prompt_start");
+	t.mock.timers.tick(5_000);
 	await emit("agent_settled");
 	assert.deepEqual(widget, ["耗时 3s"]);
 	t.mock.timers.tick(2_000);
 	assert.deepEqual(widget, ["耗时 3s"]);
+	await emit("ui_prompt_end");
+	assert.deepEqual(widget, ["耗时 3s"]);
 	await emit("agent_start");
 	assert.deepEqual(widget, ["执行中 · 0s"]);
+	t.mock.timers.tick(1_000);
+	assert.deepEqual(widget, ["执行中 · 1s"]);
+	await emit("ui_prompt_start");
 	await emit("session_shutdown");
 	t.mock.timers.tick(2_000);
 	assert.equal(widget, undefined);
