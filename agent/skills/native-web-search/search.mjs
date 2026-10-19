@@ -52,7 +52,7 @@ export function selectModel(args, settings) {
 	if (!["openai-codex", "anthropic"].includes(provider)) {
 		throw new Error("Choose --provider openai-codex or --provider anthropic and --model <id>");
 	}
-	const model = args.model ?? (provider === settings.defaultProvider ? settings.defaultModel : undefined);
+	const model = args.model ?? (provider === "openai-codex" ? "codex-auto-review" : provider === settings.defaultProvider ? settings.defaultModel : undefined);
 	if (!model) throw new Error("Pass --model <id> or save a default model for this provider in Pi");
 	return { provider, model };
 }

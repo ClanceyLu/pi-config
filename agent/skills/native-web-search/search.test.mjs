@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseArgs, selectModel, resolveApiKey } from "./search.mjs";
 
-test("selects saved model without obsolete fallback", () => {
-	assert.deepEqual(selectModel({}, { defaultProvider: "openai-codex", defaultModel: "gpt-6-astra" }), { provider: "openai-codex", model: "gpt-6-astra" });
+test("uses the verified Codex search model while preserving explicit overrides and Anthropic defaults", () => {
+	for (const defaultModel of ["auto", "gpt-5.3-codex"]) {
+		assert.deepEqual(selectModel({}, { defaultProvider: "openai-codex", defaultModel }), { provider: "openai-codex", model: "codex-auto-review" });
+	}
+	assert.deepEqual(selectModel({ provider: "openai-codex", model: "explicit" }, {}), { provider: "openai-codex", model: "explicit" });
+	assert.deepEqual(selectModel({}, { defaultProvider: "anthropic", defaultModel: "saved" }), { provider: "anthropic", model: "saved" });
 	assert.throws(() => selectModel({}, {}), /Choose --provider/);
 	assert.throws(() => selectModel({ provider: "anthropic" }, { defaultProvider: "openai-codex", defaultModel: "gpt-6-astra" }), /Pass --model/);
 	assert.throws(() => selectModel({ provider: "openai" }, {}), /Choose --provider/);
