@@ -7,10 +7,13 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+	CURSOR_MARKER,
 	Editor,
 	type EditorTheme,
 	Key,
 	matchesKey,
+	ScrollView,
+	truncateToWidth,
 	Text,
 	visibleWidth,
 	wrapTextWithAnsi,
@@ -113,7 +116,9 @@ export default function questionnaire(pi: ExtensionAPI) {
 				let optionIndex = 0;
 				let inputMode = false;
 				let inputQuestionId: string | null = null;
-				let cachedLines: string[] | undefined;
+				let followSelection = true;
+				let renderedLines: string[] = [];
+				const viewport = new ScrollView({ render: () => renderedLines }, { scrollbar: "hidden" });
 				const answers = new Map<string, Answer>();
 
 				// Editor for "Type something" option
@@ -130,8 +135,8 @@ export default function questionnaire(pi: ExtensionAPI) {
 				const editor = new Editor(tui, editorTheme);
 
 				// Helpers
-				function refresh() {
-					cachedLines = undefined;
+				function refresh(follow = true) {
+					followSelection = follow;
 					tui.requestRender();
 				}
 
@@ -187,6 +192,14 @@ export default function questionnaire(pi: ExtensionAPI) {
 				};
 
 				function handleInput(data: string) {
+					const scrollUp = matchesKey(data, Key.ctrl("p")) || matchesKey(data, Key.pageUp);
+					const scrollDown = matchesKey(data, Key.ctrl("n")) || matchesKey(data, Key.pageDown);
+					if (scrollUp || scrollDown) {
+						viewport.scrollBy((scrollUp ? -1 : 1) * Math.max(1, viewport.viewportHeight - 1));
+						refresh(false);
+						return;
+					}
+
 					// Input mode: route to editor
 					if (inputMode) {
 						if (matchesKey(data, Key.escape)) {
@@ -264,9 +277,8 @@ export default function questionnaire(pi: ExtensionAPI) {
 				}
 
 				function render(width: number): string[] {
-					if (cachedLines) return cachedLines;
-
 					const lines: string[] = [];
+					let focusLine = 0;
 					const renderWidth = Math.max(1, width);
 					const q = currentQuestion();
 					const opts = currentOptions();
@@ -324,6 +336,7 @@ export default function questionnaire(pi: ExtensionAPI) {
 							const label = `${i + 1}. ${opt.label}${isOther && inputMode ? " ✎" : ""}`;
 							const color = selected || (isOther && inputMode) ? "accent" : "text";
 
+							if (selected) focusLine = lines.length;
 							addWrappedWithPrefix(prefix, theme.fg(color, label));
 							if (opt.description) {
 								addWrappedWithPrefix("     ", theme.fg("muted", opt.description));
@@ -339,7 +352,9 @@ export default function questionnaire(pi: ExtensionAPI) {
 						renderOptions();
 						lines.push("");
 						addWrappedWithPrefix(" ", theme.fg("muted", "Your answer:"));
+						focusLine = lines.length;
 						for (const line of editor.render(Math.max(1, renderWidth - 2))) {
+							if (line.includes(CURSOR_MARKER)) focusLine = lines.length;
 							lines.push(` ${line}`);
 						}
 						lines.push("");
@@ -380,14 +395,29 @@ export default function questionnaire(pi: ExtensionAPI) {
 					}
 					lines.push(theme.fg("accent", "─".repeat(renderWidth)));
 
-					cachedLines = lines;
-					return lines;
+					const height = Math.max(1, tui.terminal.rows - 6);
+					renderedLines = lines;
+					viewport.updateLayout(lines.length, height, () => tui.requestRender());
+					if (followSelection) {
+						if (focusLine < viewport.scrollTop) viewport.scrollTo(focusLine);
+						else if (focusLine >= viewport.scrollTop + height) viewport.scrollTo(focusLine - Math.floor(height / 2));
+					}
+					const visible = viewport.render(renderWidth).slice(viewport.scrollTop, viewport.scrollTop + height);
+					if (lines.length > height) {
+						visible.push(theme.fg("dim", truncateToWidth(
+							` Ctrl+P/N scroll • ${viewport.scrollTop + 1}–${Math.min(lines.length, viewport.scrollTop + height)}/${lines.length}`,
+							renderWidth,
+						)));
+					}
+					return visible;
 				}
 
 				return {
+					get focused() { return editor.focused; },
+					set focused(value: boolean) { editor.focused = value; },
 					render,
 					invalidate: () => {
-						cachedLines = undefined;
+						followSelection = true;
 					},
 					handleInput,
 				};
