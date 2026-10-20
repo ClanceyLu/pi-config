@@ -22,8 +22,8 @@ export default function tokenSpeed(pi: ExtensionAPI) {
 	let timer: ReturnType<typeof setInterval> | undefined;
 
 	const showRate = (ctx: ExtensionContext, rate = lastRate) => {
-		lastRate = rate;
-		if (ctx.mode === "tui") ctx.ui.setStatus(STATUS_KEY, `${rate.toFixed(1)} tok/s`);
+		if (rate > 0) lastRate = rate;
+		if (ctx.mode === "tui") ctx.ui.setStatus(STATUS_KEY, `${lastRate.toFixed(1)} tok/s`);
 	};
 	const stopRequest = (ctx: ExtensionContext) => {
 		if (timer !== undefined) clearInterval(timer);

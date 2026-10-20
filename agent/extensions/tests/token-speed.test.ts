@@ -53,7 +53,7 @@ test("recent output speed replaces historical speed instead of averaging the ent
 	assert.equal(s.status(), "8.0 tok/s", "the last second added 8 tokens; the full-request average would be 14");
 });
 
-test("the first response shows speed before message_end and a stall ages out to zero", (t) => {
+test("a streaming pause retains the last positive speed and new output resumes measurement", (t) => {
 	const s = setup(t);
 	s.emit("before_provider_request");
 	s.text("Hello world");
@@ -65,7 +65,12 @@ test("the first response shows speed before message_end and a stall ages out to 
 	s.tick(750);
 	assert.equal(s.status(), "1.0 tok/s");
 	s.tick(250);
-	assert.equal(s.status(), "0.0 tok/s", "old output must disappear from the rolling window while the request stays open");
+	assert.equal(s.status(), "1.0 tok/s", "an empty window must retain the last positive speed");
+	s.tick(2_000);
+	assert.equal(s.status(), "1.0 tok/s");
+	s.text("Hello world!" + " a".repeat(8));
+	s.tick(250);
+	assert.equal(s.status(), "8.0 tok/s", "resumed output uses the current window rather than the previous speed");
 });
 
 test("silent thinking stays zero; streamed thinking counts text but not signatures", (t) => {
@@ -143,9 +148,11 @@ test("retries discard the old request window and duplicate agent_start does not 
 	assert.equal(s.status(), "6.0 tok/s");
 	s.emit("before_provider_request");
 	assert.equal(s.status(), "6.0 tok/s");
+	s.tick(2_000);
+	assert.equal(s.status(), "6.0 tok/s", "waiting for a retried request must retain the previous speed");
 	s.text("Hello world");
 	s.tick(250);
-	assert.equal(s.status(), "8.0 tok/s");
+	assert.equal(s.status(), "2.0 tok/s");
 });
 
 test("tokenization cooldown keeps the newest pending snapshot for the next measurement", (t) => {
