@@ -61,8 +61,10 @@ export default function compactFooter(pi: ExtensionAPI) {
 					const name = manager.getSessionName();
 					if (name) path += ` • ${name}`;
 					const location = truncateToWidth(path, Math.floor(width / 3));
-					const lines = [theme.fg("dim", alignStats(`${location} | ${contextDisplay}`, formatModel(ctx, routed), width))];
-					const statuses = [...footerData.getExtensionStatuses()].sort(([a], [b]) => a.localeCompare(b));
+					const extensionStatuses = footerData.getExtensionStatuses();
+					const speed = extensionStatuses.get("token-speed");
+					const lines = [theme.fg("dim", alignStats(`${location} | ${contextDisplay}${speed ? ` | ${speed}` : ""}`, formatModel(ctx, routed), width))];
+					const statuses = [...extensionStatuses].filter(([key]) => key !== "token-speed").sort(([a], [b]) => a.localeCompare(b));
 					if (statuses.length) lines.push(truncateToWidth(theme.fg("dim", statuses.map(([, value]) => value.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim()).join(" ")), width));
 					return lines;
 				},

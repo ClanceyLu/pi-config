@@ -66,13 +66,14 @@ test("footer shows the live routed model before persistence and unsubscribes on 
 	assert.equal(handlers.has("message_update"), false);
 });
 
-test("footer shows only context percentage alongside location and model, preserving warnings and extension statuses", () => {
+test("footer places speed after context percentage, preserving warnings and other extension statuses", () => {
 	let start: Function;
 	let factory: Function;
 	let disposed = false;
 	let scans = 0;
 	let leaf = "one";
 	let percent: number | null = 95;
+	const statuses = new Map([["b", "fast\nmode"], ["token-speed", "10.0 tok/s"], ["a", "PM"]]);
 	const usage = { input: 1000, output: 100, cacheRead: 1000, cacheWrite: 0, cost: { total: 0.1 } };
 	const message = { role: "assistant", model: "gpt-5.6-sol", thinkingLevel: "medium", usage };
 	const entries = [{ type: "message", message }, { type: "usage", usage }, { type: "compaction", usage }, { type: "message", message: { role: "toolResult", usage } }];
@@ -96,11 +97,11 @@ test("footer shows only context percentage alongside location and model, preserv
 	start!({}, ctx);
 	const footer = factory!({ requestRender() {} }, { fg: (color: string, text: string) => color === "dim" ? text : `[${color}:${text}]` }, {
 		onBranchChange: () => () => { disposed = true; }, getGitBranch: () => "main",
-		getExtensionStatuses: () => new Map([["b", "fast\nmode"], ["a", "PM"]]),
+		getExtensionStatuses: () => statuses,
 	});
 	const lines = footer.render(160);
 	assert.equal(lines.length, 2, "location and stats share one row, extension statuses keep their own row");
-	assert.match(lines[0], /^\/tmp\/project \(main\) • Work \| \[error:95\.0%\] +gpt/);
+	assert.match(lines[0], /^\/tmp\/project \(main\) • Work \| \[error:95\.0%\] \| 10\.0 tok\/s +gpt/);
 	assert.doesNotMatch(lines[0], /[↑↓$]|CH|200k|R1|auto|→/);
 	assert.match(lines[0], /gpt-5.6-sol · high$/);
 	assert.equal(lines[1], "PM fast mode");
@@ -114,12 +115,12 @@ test("footer shows only context percentage alongside location and model, preserv
 	assert.equal(scans, 1, "selected level updates even with the route cached");
 	leaf = "two";
 	percent = null;
-	assert.match(footer.render(160)[0], / \| \? +gpt/);
+	assert.match(footer.render(160)[0], / \| \? \| 10\.0 tok\/s +gpt/);
 	assert.equal(scans, 2);
 	percent = 75;
 	assert.match(footer.render(160)[0], /\[warning:75\.0%\]/);
 	percent = 0;
-	assert.match(footer.render(160)[0], / \| 0\.0% +gpt/);
+	assert.match(footer.render(160)[0], / \| 0\.0% \| 10\.0 tok\/s +gpt/);
 	ctx.model = model("gpt-5.6-luna") as ExtensionContext["model"];
 	ctx.thinkingLevel = "low";
 	assert.match(footer.render(160)[0], /gpt-5.6-luna · low$/);
@@ -131,6 +132,11 @@ test("footer shows only context percentage alongside location and model, preserv
 		for (const line of narrow) assert.ok(visibleWidth(line) <= width);
 	}
 	assert.match(footer.render(160)[0], /gpt-5.6-luna · low$/);
+	statuses.delete("a");
+	statuses.delete("b");
+	assert.equal(footer.render(160).length, 1, "speed alone must not create a separate status row");
+	statuses.delete("token-speed");
+	assert.doesNotMatch(footer.render(160)[0], /tok\/s/);
 	footer.dispose();
 	assert.ok(disposed);
 });

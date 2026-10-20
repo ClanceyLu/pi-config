@@ -1,0 +1,11 @@
+{
+  "name": "pi-token-speed",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test ../tests/token-speed.test.ts"
+  },
+  "dependencies": {
+    "js-tiktoken": "1.0.21"
+  }
+}
