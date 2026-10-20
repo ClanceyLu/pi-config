@@ -11,6 +11,7 @@ const WINDOW_MS = 1_000;
 export default function tokenSpeed(pi: ExtensionAPI) {
 	const encoder = new Tiktoken(o200kBase);
 	let active = false;
+	let lastRate = 0;
 	let request: {
 		message?: AssistantMessage;
 		output: number;
@@ -20,7 +21,8 @@ export default function tokenSpeed(pi: ExtensionAPI) {
 	} | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
 
-	const showRate = (ctx: ExtensionContext, rate = 0) => {
+	const showRate = (ctx: ExtensionContext, rate = lastRate) => {
+		lastRate = rate;
 		if (ctx.mode === "tui") ctx.ui.setStatus(STATUS_KEY, `${rate.toFixed(1)} tok/s`);
 	};
 	const stopRequest = (ctx: ExtensionContext) => {

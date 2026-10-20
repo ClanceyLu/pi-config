@@ -81,19 +81,22 @@ test("silent thinking stays zero; streamed thinking counts text but not signatur
 	assert.equal(s.status(), "2.0 tok/s", "only the two visible thinking tokens belong in the latest one-second window");
 });
 
-test("tool parameter streaming is measured safely, but tool execution and subsequent requests do not reuse old speed", (t) => {
+test("tool execution retains the last speed while subsequent requests use independent samples", (t) => {
 	const s = setup(t);
 	s.emit("before_provider_request");
 	s.content([{ type: "toolCall", name: "read", arguments: { path: "<|endoftext|>" } }]);
 	s.tick(250);
 	assert.ok(Number.parseFloat(s.status()!) > 0, "a special-token literal in a tool argument must not break tokenization");
+	const lastSpeed = s.status();
 	s.end("toolUse");
-	assert.equal(s.status(), "0.0 tok/s");
+	assert.equal(s.status(), lastSpeed);
 	s.emit("message_end", { message: { role: "toolResult" } });
 	s.tick(10_000);
-	assert.equal(s.status(), "0.0 tok/s");
+	assert.equal(s.status(), lastSpeed);
 	s.emit("turn_start");
+	assert.equal(s.status(), lastSpeed);
 	s.emit("before_provider_request");
+	assert.equal(s.status(), lastSpeed);
 	s.text("Hello world");
 	s.tick(250);
 	assert.equal(s.status(), "8.0 tok/s", "the new request starts its own window");
@@ -107,13 +110,13 @@ test("success, failure and cancellation stop streaming without turning final API
 		s.tick(250);
 		assert.equal(s.status(), "8.0 tok/s");
 		s.end(reason);
-		assert.equal(s.status(), "0.0 tok/s");
+		assert.equal(s.status(), "8.0 tok/s");
 		s.tick(2_000);
-		assert.equal(s.status(), "0.0 tok/s");
+		assert.equal(s.status(), "8.0 tok/s");
 	}
 });
 
-test("conversation and session lifecycle events stop timers and ignore stale snapshots", (t) => {
+test("conversation and session lifecycle events retain speed, stop timers and ignore stale snapshots", (t) => {
 	const s = setup(t);
 	for (const event of ["agent_settled", "session_tree", "session_shutdown", "session_start"]) {
 		s.emit("agent_start");
@@ -125,7 +128,7 @@ test("conversation and session lifecycle events stop timers and ignore stale sna
 		s.text("Hello world!");
 		s.emit("before_provider_request");
 		s.tick(2_000);
-		assert.equal(s.status(), "0.0 tok/s");
+		assert.equal(s.status(), "8.0 tok/s");
 	}
 });
 
@@ -139,7 +142,7 @@ test("retries discard the old request window and duplicate agent_start does not 
 	s.tick(250);
 	assert.equal(s.status(), "6.0 tok/s");
 	s.emit("before_provider_request");
-	assert.equal(s.status(), "0.0 tok/s");
+	assert.equal(s.status(), "6.0 tok/s");
 	s.text("Hello world");
 	s.tick(250);
 	assert.equal(s.status(), "8.0 tok/s");
