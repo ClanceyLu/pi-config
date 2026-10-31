@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { registerHooks } from "node:module";
-import { mock, test } from "node:test";
+import { after, beforeEach, mock, test } from "node:test";
 const root = mkdtempSync(join(tmpdir(), "pi-teams-integration-"));
+beforeEach(() => rmSync(join(root, "team-settings.json"), { force: true }));
+after(() => rmSync(root, { recursive: true, force: true }));
 const children: any[] = [];
 let nextSession = 0;
 let failNextCreation = false;
@@ -34,6 +36,33 @@ function harness(id: string) {
  const seal = async (dispositions = {}) => { const view = await call("list_agents"); return call("team_finalize", { round_id: view.round.id, expected_seq: view.event_seq, dispositions }); };
  return { tools, handlers, commands, notices, ctx, call, on, off, seal };
 }
+test("global switch survives session changes, extension reloads and shutdown without sharing team boards", async () => {
+ const h = harness("global-first");
+ const reloaded = harness("global-reloaded");
+ const disabled = harness("global-disabled");
+ const start = (instance: ReturnType<typeof harness>) => instance.handlers.get("session_start")({}, instance.ctx);
+ try {
+  await start(h);
+  await assert.rejects(h.call("list_agents"), /off/);
+  await h.commands.get("team").handler("on", h.ctx);
+  await h.call("team_task_create", { subject: "first session", description: "must stay in this session" });
+  h.ctx.sessionManager.getSessionId = () => "global-second";
+  await start(h);
+  assert.deepEqual(await h.call("team_task_list"), []);
+  assert.equal((await h.call("list_agents")).members.length, 1);
+  await h.off();
+  // A newly loaded extension restores the global preference without /team on.
+  await start(reloaded);
+  assert.equal((await reloaded.call("list_agents")).members.length, 1);
+  await reloaded.commands.get("team").handler("off", reloaded.ctx);
+  reloaded.ctx.sessionManager.getSessionId = () => "global-off-switch";
+  await start(reloaded);
+  await assert.rejects(reloaded.call("list_agents"), /off/);
+  await start(disabled);
+  await assert.rejects(disabled.call("list_agents"), /off/);
+ } finally { await h.off(); await reloaded.off(); await disabled.off(); }
+});
+
 test("queued work uses separate turns, durable results and explicit sealing; members remain reusable", async () => {
  const h = harness("lead-session");
  try {
@@ -61,6 +90,50 @@ test("queued work uses separate turns, durable results and explicit sealing; mem
   await h.handlers.get("session_start")({}, { ...h.ctx, sessionManager: { ...h.ctx.sessionManager, getSessionId: () => "other-session" } });
   assert.equal(children[initial+1].disposed,true);
  } finally { await h.off(); }
+});
+test("work sent as a teammate finishes starts without another message", async () => {
+ const h = harness("settlement-race");
+ try {
+  await h.on(); const initial = children.length;
+  await h.call("spawn_teammate", { name: "worker", description: "test", prompt: "first" });
+  const child = children[initial];
+  child.finish();
+  const accepted = await h.call("send_message", { target: "worker", message: "second" });
+  await tick();
+  assert.equal(accepted.accepted, true);
+  assert.equal(child.prompts.length, 2);
+  assert.match(child.prompts[1], /second/);
+  child.finish(); await tick();
+  assert.equal((await h.call("team_wait", { condition: "all_required_settled", timeout_ms: 10 })).reason, "satisfied");
+  const inbox = await h.call("team_results");
+  assert.equal(inbox.results.length, 2);
+  assert.ok(inbox.results.every(r => r.outcome === "succeeded"));
+  await h.call("team_results_ack", { result_ids: inbox.results.map(r => r.id) });
+  assert.equal((await h.seal()).sealed, true);
+ } finally { await h.off(); }
+});
+test("off stops running and queued work even when the global preference cannot be saved", async () => {
+ const h = harness("off-write-failure");
+ try {
+  await h.on(); const initial = children.length;
+  await h.call("spawn_teammate", { name: "worker", description: "test", prompt: "running" });
+  const child = children[initial];
+  await h.call("send_message", { target: "worker", message: "queued" });
+  rmSync(join(root, "team-settings.json"));
+  mkdirSync(join(root, "team-settings.json"));
+  await assert.rejects(h.commands.get("team").handler("off", h.ctx));
+  assert.equal(child.disposed, true);
+  assert.equal(child.prompts.length, 1);
+  await assert.rejects(h.call("list_agents"), /off/);
+  rmSync(join(root, "team-settings.json"), { recursive: true });
+  await h.commands.get("team").handler("on", h.ctx);
+  const inbox = await h.call("team_results");
+  assert.equal(inbox.results.length, 2);
+  assert.ok(inbox.results.every(r => r.outcome === "cancelled"));
+ } finally {
+  rmSync(join(root, "team-settings.json"), { recursive: true, force: true });
+  await h.off();
+ }
 });
 test("simultaneous completion sends one hidden wake, and reading prevents repeated stale wakes", async () => {
  const h = harness("batch-session");

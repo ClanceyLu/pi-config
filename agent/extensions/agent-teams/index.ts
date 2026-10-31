@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { Type } from "typebox";
 import { createAgentSession, DefaultResourceLoader, getAgentDir, ModelRuntime, SessionManager, type AgentSession, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { openBoard, text, type Member, type Update } from "./core.ts";
@@ -10,6 +11,27 @@ const POLICY = `Agent Teams: members share cwd and filesystem. Split writes into
 const reply = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 const string = () => Type.String({ minLength: 1 });
 const optionalStrings = () => Type.Optional(Type.Array(string()));
+
+// The preference is global; team boards and child sessions remain session-scoped.
+function globallyEnabled() {
+ try {
+  const settings = JSON.parse(readFileSync(join(getAgentDir(), "team-settings.json"), "utf8"));
+  if (typeof settings?.enabled !== "boolean") throw new Error("Invalid team-settings.json: enabled must be a boolean");
+  return settings.enabled;
+ } catch (error) {
+  if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+  throw error;
+ }
+}
+function saveEnabled(enabled: boolean) {
+ const directory = getAgentDir(), file = join(directory, "team-settings.json");
+ mkdirSync(directory, { recursive: true });
+ const temporary = `${file}.${randomUUID()}.tmp`;
+ try {
+  writeFileSync(temporary, `${JSON.stringify({ enabled }, null, 2)}\n`, { mode: 0o600 });
+  renameSync(temporary, file);
+ } finally { rmSync(temporary, { force: true }); }
+}
 
 type Live = { session: AgentSession; running: boolean; cancelling?: boolean; turnId?: string; report?: Report; run?: Promise<void>; preview?: string; unsubscribe?: () => void };
 export default function teams(pi: ExtensionAPI) {
@@ -171,23 +193,28 @@ export default function teams(pi: ExtensionAPI) {
   child.running = true;
   const generation = epoch;
   child.run = (async () => {
-   while (enabled && !closing && generation === epoch && !child.cancelling) {
-    const next = lifecycle.state.turns.find(t => t.member === name && t.status === "queued");
-    if (!next) break;
-    lifecycle.running(next.id); child.turnId = next.id; child.report = undefined; child.preview = next.prompt.slice(0, 240); changed();
-    let outcome: Outcome = "succeeded", summary = "No closing message.";
-    try {
-     await child.session.prompt(next.prompt, { expandPromptTemplates: false });
-     const last = [...child.session.messages].reverse().find(m => m.role === "assistant") as any;
-     if (last?.stopReason === "error") throw new Error(last.errorMessage || "Teammate model failed");
-     if (last?.stopReason === "aborted" || child.cancelling || closing) outcome = "cancelled";
-     summary = child.report?.summary ?? child.session.getLastAssistantText() ?? summary;
-    } catch (error) { outcome = child.cancelling || closing ? "cancelled" : "failed"; summary = String(error); }
-    // Commit before reporting completion. A disk error leaves a recoverable unsettled turn.
-    lifecycle.finish(next.id, outcome, summary, child.report);
-    child.turnId = undefined; child.preview = undefined; changed();
-   }
-  })().catch(error => { storageError = String(error); }).finally(() => { child.running = false; child.turnId = undefined; changed(); });
+   // Clear running in the same continuation that observes an empty queue, so
+   // enqueue cannot accept work between loop exit and an asynchronous finalizer.
+   try {
+    while (enabled && !closing && generation === epoch && !child.cancelling) {
+     const next = lifecycle.state.turns.find(t => t.member === name && t.status === "queued");
+     if (!next) break;
+     lifecycle.running(next.id); child.turnId = next.id; child.report = undefined; child.preview = next.prompt.slice(0, 240); changed();
+     let outcome: Outcome = "succeeded", summary = "No closing message.";
+     try {
+      await child.session.prompt(next.prompt, { expandPromptTemplates: false });
+      const last = [...child.session.messages].reverse().find(m => m.role === "assistant") as any;
+      if (last?.stopReason === "error") throw new Error(last.errorMessage || "Teammate model failed");
+      if (last?.stopReason === "aborted" || child.cancelling || closing) outcome = "cancelled";
+      summary = child.report?.summary ?? child.session.getLastAssistantText() ?? summary;
+     } catch (error) { outcome = child.cancelling || closing ? "cancelled" : "failed"; summary = String(error); }
+     // Commit before reporting completion. A disk error leaves a recoverable unsettled turn.
+     lifecycle.finish(next.id, outcome, summary, child.report);
+     child.turnId = undefined; child.preview = undefined; changed();
+    }
+   } catch (error) { storageError = String(error); }
+   finally { child.running = false; child.turnId = undefined; changed(); }
+  })();
  }
  async function interrupt(name: string) {
   board().member(name); const child = live.get(name);
@@ -310,14 +337,23 @@ export default function teams(pi: ExtensionAPI) {
   tool("team_task_update", "Compare-and-set a shared task. Reassign is Lead-only; other mutations require owner or Lead.", Type.Object({ task_id: string(), expected_revision: Type.Integer({ minimum: 1 }), action: Type.Union(["claim", "release", "complete", "reopen", "reassign", "edit", "set_dependencies", "delete"].map(Type.Literal)), owner: Type.Optional(string()), subject: Type.Optional(string()), description: Type.Optional(string()), blocked_by: optionalStrings(), write_scopes: optionalStrings() }), (a: Update) => { lifecycle.begin(caller); const result = board().update(caller, a); lifecycle.attachTask(result.id); changed(); return result; });
  }
  register(pi, "lead");
- pi.on("session_start", async (_event, ctx) => { if (owner) await shutdown(); context = ctx; });
+ pi.on("session_start", async (_event, ctx) => {
+  if (owner) await shutdown();
+  context = ctx;
+  if (globallyEnabled()) await activate(ctx);
+ });
  pi.on("session_shutdown", shutdown);
  pi.on("agent_settled", () => { scheduleWake(); });
  pi.on("before_agent_start", event => enabled ? { systemPrompt: `${event.systemPrompt}\n\n${POLICY}\nYou are Team Lead named lead.` } : undefined);
- pi.registerCommand("team", { description: "团队：/team [dashboard|on|off|status]", handler: async (args, ctx) => {
+ pi.registerCommand("team", { description: "团队：/team [dashboard|on|off|status]，开关全局生效", handler: async (args, ctx) => {
   const action = args.trim() || "dashboard";
-  if (action === "on") { await activate(ctx); ctx.ui.notify("团队已开启，/team 查看成员与任务", "info"); }
-  else if (action === "off") { await shutdown(); ctx.ui.notify("团队已关闭", "info"); }
+  if (action === "on") { saveEnabled(true); await activate(ctx); ctx.ui.notify("团队已全局开启，/team 查看成员与任务", "info"); }
+  else if (action === "off") {
+   try { saveEnabled(false); }
+   catch (error) { throw new Error(`当前会话团队已关闭，但无法保存全局关闭设置，后续会话可能重新开启：${String(error)}`, { cause: error }); }
+   finally { await shutdown(); }
+   ctx.ui.notify("团队已全局关闭", "info");
+  }
   else if (action === "dashboard") await dashboard(ctx);
   else if (action === "status") ctx.ui.notify(enabled ? heading(teamView()) : "团队已关闭", "info");
   else throw new Error("Usage: /team [dashboard|on|off|status]");

@@ -128,6 +128,10 @@ git diff --cached
 
 首次同步此扩展后安装依赖：`pnpm --dir ~/.pi/agent/extensions/token-speed install --frozen-lockfile`，然后在 Pi 中运行 `/reload`。验证：`pnpm --dir agent/extensions/token-speed test`。
 
+### Agent Teams
+
+`/team on` 和 `/team off` 将开关保存为本机全局设置；新建、切换会话、重启 Pi 或执行 `/reload` 后都会沿用，无需逐个 session 设置。首次使用默认关闭。开关保存在 `agent/team-settings.json`（不通过 Git 同步），成员、任务和协作结果仍按 session 独立保存。`/team` 查看当前会话的成员与任务，`/team status` 查看当前状态。
+
 ### 更新 Pi 和 packages
 
 ```zsh
