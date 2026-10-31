@@ -3,11 +3,11 @@ import { relative, isAbsolute, sep } from "node:path";
 import type { ExtensionAPI, ExtensionContext, MessageStartEvent } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-export function formatModel(ctx: Pick<ExtensionContext, "model" | "thinkingLevel">, routed?: { model: string; thinkingLevel?: string }): string {
+export function formatModel(ctx: Pick<ExtensionContext, "model" | "thinkingLevel">, routed?: { model: string; provider?: string; thinkingLevel?: string }): string {
 	const selected = ctx.model;
 	if (!selected) return "no-model";
 	const physical = selected.api === "pi-virtual" ? routed : undefined;
-	const name = physical?.model ?? selected.id;
+	const name = `${physical?.provider ?? selected.provider}/${physical?.model ?? selected.id}`;
 	const level = ctx.thinkingLevel ?? "off";
 	return selected.reasoning ? `${name} · ${level}` : name;
 }
@@ -25,7 +25,7 @@ export default function compactFooter(pi: ExtensionAPI) {
 		if (ctx.mode !== "tui") return;
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			let statsKey = "";
-			let routed: { model: string; thinkingLevel?: string } | undefined;
+			let routed: { model: string; provider?: string; thinkingLevel?: string } | undefined;
 			const sessionKey = () => {
 				const manager = ctx.sessionManager;
 				return `${manager.getSessionId()}:${manager.getLeafId()}:${manager.getEntryCount()}`;

@@ -7,11 +7,12 @@ import compactFooter, { alignStats, formatModel } from "../compact-footer.ts";
 const model = (id = "gpt-5.6-sol", api = "openai-responses") => ({ id, api, reasoning: true, provider: "openai-codex", contextWindow: 200000 });
 
 test("compact model keeps routing but always shows the selected thinking level", () => {
-	assert.equal(formatModel({ model: model(), thinkingLevel: "medium" } as ExtensionContext), "gpt-5.6-sol · medium");
-	assert.equal(formatModel({ model: model("auto", "pi-virtual"), thinkingLevel: "high" } as ExtensionContext, { model: "gpt-5.6-sol", thinkingLevel: "medium" }), "gpt-5.6-sol · high");
-	assert.equal(formatModel({ model: model("auto", "pi-virtual"), thinkingLevel: "high" } as ExtensionContext), "auto · high");
-	assert.equal(formatModel({ model: model(), thinkingLevel: "high" } as ExtensionContext, { model: "old-model" }), "gpt-5.6-sol · high");
-	assert.equal(formatModel({ model: { ...model(), reasoning: false } } as ExtensionContext), "gpt-5.6-sol");
+	assert.equal(formatModel({ model: model(), thinkingLevel: "medium" } as ExtensionContext), "openai-codex/gpt-5.6-sol · medium");
+	assert.equal(formatModel({ model: model("auto", "pi-virtual"), thinkingLevel: "high" } as ExtensionContext, { model: "gpt-5.6-sol", thinkingLevel: "medium" }), "openai-codex/gpt-5.6-sol · high");
+	assert.equal(formatModel({ model: model("auto", "pi-virtual"), thinkingLevel: "high" } as ExtensionContext), "openai-codex/auto · high");
+	assert.equal(formatModel({ model: model(), thinkingLevel: "high" } as ExtensionContext, { model: "old-model" }), "openai-codex/gpt-5.6-sol · high");
+	assert.equal(formatModel({ model: { ...model(), reasoning: false } } as ExtensionContext), "openai-codex/gpt-5.6-sol");
+	assert.equal(formatModel({ model: model("auto", "pi-virtual"), thinkingLevel: "high" } as ExtensionContext, { provider: "uuidcx", model: "routed-model" }), "uuidcx/routed-model · high");
 	assert.equal(formatModel({ model: undefined }), "no-model");
 });
 
@@ -101,7 +102,7 @@ test("footer places speed after context percentage, preserving warnings and othe
 	});
 	const lines = footer.render(160);
 	assert.equal(lines.length, 2, "location and stats share one row, extension statuses keep their own row");
-	assert.match(lines[0], /^\/tmp\/project \(main\) • Work \| \[error:95\.0%\] \| 10\.0 tok\/s +gpt/);
+	assert.match(lines[0], /^\/tmp\/project \(main\) • Work \| \[error:95\.0%\] \| 10\.0 tok\/s +openai-codex\/gpt/);
 	assert.doesNotMatch(lines[0], /[↑↓$]|CH|200k|R1|auto|→/);
 	assert.match(lines[0], /gpt-5.6-sol · high$/);
 	assert.equal(lines[1], "PM fast mode");
@@ -115,12 +116,12 @@ test("footer places speed after context percentage, preserving warnings and othe
 	assert.equal(scans, 1, "selected level updates even with the route cached");
 	leaf = "two";
 	percent = null;
-	assert.match(footer.render(160)[0], / \| \? \| 10\.0 tok\/s +gpt/);
+	assert.match(footer.render(160)[0], / \| \? \| 10\.0 tok\/s +openai-codex\/gpt/);
 	assert.equal(scans, 2);
 	percent = 75;
 	assert.match(footer.render(160)[0], /\[warning:75\.0%\]/);
 	percent = 0;
-	assert.match(footer.render(160)[0], / \| 0\.0% \| 10\.0 tok\/s +gpt/);
+	assert.match(footer.render(160)[0], / \| 0\.0% \| 10\.0 tok\/s +openai-codex\/gpt/);
 	ctx.model = model("gpt-5.6-luna") as ExtensionContext["model"];
 	ctx.thinkingLevel = "low";
 	assert.match(footer.render(160)[0], /gpt-5.6-luna · low$/);
