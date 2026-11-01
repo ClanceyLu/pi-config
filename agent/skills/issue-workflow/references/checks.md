@@ -1,10 +1,10 @@
 # Validation checks
 
-PM coordination and worktree/lifecycle scenarios below assume PM is enabled. With PM off, explicit Issue operations keep their own permissions but do not activate coordination.
+PM coordination scenarios below are historical: the mode extension and its Skill have been removed. They do not enable coordination or grant permissions. Explicit Issue operations retain their own scope and authorization.
 
 ## Mode boundary regression
 
-Run `node --experimental-test-module-mocks --test agent/extensions/pm-mode/boundary.test.ts` from the repository root. This executes the real extension handlers and reads current Skills; CLI and schema fixtures are controlled. Static positive/negative contracts do not establish real model behavior.
+The mode-boundary harness was removed with the extension. The following table records historical expectations, not executable tests or current runtime behavior.
 
 | State / request | Required behavior |
 | --- | --- |
@@ -224,7 +224,7 @@ Evaluate these against execution.md and both Skill entrypoints. A static/manual 
 
 ## App operations and diagnosis regression
 
-The previous extension injection harness was removed with `agent/extensions/tests/`. The current focused harness is documented below. Neither its results nor historical results prove model choices or platform end-to-end behavior. Run the following cases separately in a controlled model session when that evidence is required; do not claim this scenario table as an executed test.
+The extension injection harnesses have been removed. Historical results do not prove current model choices or platform end-to-end behavior. Run the following cases separately in a controlled model session when that evidence is required; do not claim this scenario table as an executed test.
 
 | Request / observation | Expected behavior |
 | --- | --- |
@@ -244,7 +244,7 @@ Reject regressions that route these operations to an Issue because tools are nee
 
 ## Draft PR lifecycle contracts
 
-Check both Skill entrypoints, execution/delivery references and the actual pm-mode before_agent_start injection, including forced system prompts and missing-Skill fallback. Prompt contracts verify guidance availability, not model compliance or hosting behavior.
+Review the Issue Skill and execution/delivery references only where an explicit task or runtime contract requires this lifecycle. The removed mode injection and fallback are no longer available. Prompt contracts do not prove model compliance or hosting behavior.
 
 | Input | Required outcome |
 | --- | --- |
@@ -261,4 +261,4 @@ Check both Skill entrypoints, execution/delivery references and the actual pm-mo
 | Local merge only, unknown target, conflict or remote result unconfirmed | No closure; report missing gate |
 | PR URL recorded but platform link not verified | Do not claim formal association or invent a linking command |
 
-Run the resident prompt harness with `node --experimental-test-module-mocks --test agent/extensions/pm-mode/index.test.ts`. Separately report any temporary Git experiment and real hosting checks; neither proves full platform/model end-to-end behavior.
+The resident prompt harness was removed with the mode extension. Report any temporary Git experiment and real hosting checks separately; neither proves full platform/model end-to-end behavior.
