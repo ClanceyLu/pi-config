@@ -2,9 +2,11 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync, rmSync } from "node
 import { join, posix } from "node:path";
 import type { Ledger } from "./lifecycle.ts";
 
-export type Member = { name: string; description: string; context: "fresh" | "fork"; sessionFile?: string; provider: string; model: string; thinking: string; phase: "provisioning" | "active" | "failed"; error?: string };
+export type PendingMessage = { id: string; target: string; sender: string; text: string; turnId?: string; status: "queued" | "admitted" };
+export type ChildRecord = { id: string; name: string; description: string; parent: string; kind: "teammate" | "subagent"; context: "fresh" | "fork"; cwd: string; sessionFile?: string; provider: string; model: string; thinking: string; phase: "provisioning" | "active" | "failed"; error?: string };
+export type Member = { id?: string; parent?: string; kind?: "teammate"; cwd?: string; name: string; description: string; context: "fresh" | "fork"; sessionFile?: string; provider: string; model: string; thinking: string; terminal?: string; phase: "provisioning" | "active" | "failed"; error?: string };
 export type Task = { id: string; subject: string; description: string; status: "pending" | "in_progress" | "completed" | "deleted"; revision: number; owner?: string; blockedBy: string[]; writeScopes: string[] };
-export type State = { version: 1 | 2; teamId: string; cwd: string; members: Member[]; tasks: Task[]; nextTask: number; sequence: number; coordination?: Ledger };
+export type State = { version: 1 | 2; teamId: string; cwd: string; members: Member[]; tasks: Task[]; nextTask: number; sequence: number; coordination?: Ledger; children?: ChildRecord[]; inbox?: PendingMessage[] };
 export type Update = { task_id: string; expected_revision: number; action: "claim" | "release" | "complete" | "reopen" | "reassign" | "edit" | "set_dependencies" | "delete"; owner?: string; subject?: string; description?: string; blocked_by?: string[]; write_scopes?: string[] };
 export function text(value: string, limit = 16384) { if (!value.trim() || value.length > limit) throw new Error(`Expected nonempty text up to ${limit} characters`); return value; }
 function scopes(values: string[]) { return [...new Set(values.map(value => { const path = posix.normalize(value.replaceAll("\\", "/")).replace(/\/$/, ""); if (!path || path === "." || path.startsWith("/") || path === ".." || path.startsWith("../") || /^[A-Za-z]:/.test(path)) throw new Error("write_scopes must be workspace-relative paths"); return path; }))]; }

@@ -2,31 +2,29 @@ import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { Text, matchesKey, stripTerminalSequences, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { Result } from "./lifecycle.ts";
 
-export type MemberView = { name: string; description?: string; status: string; latest_outcome?: string; model?: string; sessionFile?: string; error?: string; preview?: string };
+export type MemberView = { name: string; description?: string; status: string; latest_outcome?: string; provider?: string; model?: string; thinking?: string; sessionFile?: string; error?: string; preview?: string };
 export type TaskView = { id: string; subject: string; status: string; owner?: string; ready: boolean; writeScopeWarnings: string[] };
-export type TeamView = { phase: "open" | "sealed" | "empty"; members: MemberView[]; tasks: TaskView[]; results: Result[]; pending: number; unseenFailures: number; storageError?: string };
+export type TeamView = { phase: "open" | "sealed" | "empty"; members: MemberView[]; tasks: TaskView[]; results: Result[]; unseenFailures: number; storageError?: string };
 const status: Record<string, string> = { running: "执行中", inactive: "空闲", idle: "空闲", cancelling: "取消中", provisioning: "准备中", failed: "创建失败", recovery_required: "需要恢复" };
 const outcome: Record<string, string> = { succeeded: "成功", failed: "失败", cancelled: "已取消", recovery_required: "需要恢复" };
-const glyph: Record<string, string> = { running: "●", cancelling: "◐", provisioning: "…", failed: "×", idle: "○", recovery_required: "!" };
+const glyph: Record<string, string> = { running: "●", cancelling: "◐", provisioning: "…", failed: "×", inactive: "○", idle: "○", recovery_required: "!" };
 export const clean = (value: string) => stripTerminalSequences(value).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
 const oneLine = (value: string) => clean(value).replace(/\s+/g, " ").trim();
 const phase = (view: TeamView) => view.phase === "sealed" ? "已收尾" : view.phase === "empty" ? "待分配" : "协作中";
 const completed = (view: TeamView) => view.tasks.filter(t => t.status === "completed").length;
 export function heading(view: TeamView) {
- return `Team · ${phase(view)} · ${view.members.filter(m => m.status === "running" || m.status === "cancelling").length} 执行中 · ${view.pending} 待处理${view.unseenFailures ? ` · ! ${view.unseenFailures} 未读异常` : ""}`;
+ return `Team · ${phase(view)} · ${view.members.filter(m => m.status === "running" || m.status === "cancelling").length} 执行中 · ${view.tasks.filter(t => t.status === "pending").length} 任务待处理 · ${view.results.filter(r => !r.acknowledged_at).length} 条结果/消息待确认${view.unseenFailures ? ` · ! ${view.unseenFailures} 未读异常` : ""}`;
 }
 function memberLine(member: MemberView) {
  const last = member.latest_outcome && outcome[member.latest_outcome];
  return `${glyph[member.status] ?? "·"} ${member.name} · ${status[member.status] ?? member.status}${last && member.status !== "running" ? ` · 最近：${last}` : ""}`;
 }
+function modelLine(member: MemberView) {
+ return `模型：${member.provider ? member.provider + "/" : ""}${member.model ?? "未知"}${member.thinking ? ` · ${member.thinking}` : ""}`;
+}
 export function widgetLines(view: TeamView, width: number): string[] {
  const lines = [heading(view)];
  if (view.storageError) lines.push(`! ${oneLine(view.storageError)}`);
- if (view.phase !== "sealed") {
-  const members = [...view.members].sort((a, b) => Number(b.status === "running" || b.status === "cancelling") - Number(a.status === "running" || a.status === "cancelling"));
-  for (const member of members.slice(0, 4)) lines.push(`${memberLine(member)}${member.status === "running" && member.preview ? ` · ${oneLine(member.preview)}` : ""}`);
-  if (members.length > 4) lines.push(`… 另有 ${members.length - 4} 个成员`);
- }
  lines.push(`任务 ${completed(view)}/${view.tasks.length} · /team 查看详情`);
  return lines.map(line => truncateToWidth(oneLine(line), Math.max(1, width)));
 }
@@ -107,7 +105,7 @@ export class TeamDashboard {
   let body: string[] = [];
   if (view.storageError) body.push(`! 存储异常：${view.storageError}`, "");
   if (this.detail && member) {
-   body.push(memberLine(member), member.description ?? "", `模型：${member.model ?? "未知"}`, "");
+   body.push(memberLine(member), member.description ?? "", modelLine(member), "");
    if (member.error) body.push(`! ${member.error}`);
    if (member.preview) body.push(`当前活动：${member.preview}`, "");
    if (this.log) body.push(...this.logLines);
@@ -115,7 +113,7 @@ export class TeamDashboard {
     const results = view.results.filter(r => r.member === member.name).slice(-50);
     if (!results.length) body.push("尚无结果或消息。");
     for (const result of results) {
-     body.push(`${result.produced_at} · ${result.outcome ? outcome[result.outcome] : result.kind} · ${result.acknowledged_at ? "Lead 已处理" : "待 Lead 处理"}`, ...result.summary.split("\n"));
+     body.push(`${result.produced_at} · ${result.outcome ? outcome[result.outcome] : result.kind} · ${result.acknowledged_at ? "Lead 已确认" : "待 Lead 确认"}`, ...result.summary.split("\n"));
      if (result.report?.blocker) body.push(`阻塞：${result.report.blocker}`);
      if (result.report?.artifacts?.length) body.push("产物：", ...result.report.artifacts);
      if (result.report?.verification?.length) body.push("成员报告的验证：", ...result.report.verification);
@@ -126,7 +124,7 @@ export class TeamDashboard {
    body.push("成员");
    if (!view.members.length) body.push("尚未创建成员。");
    for (const row of view.members) {
-    body.push(`${row.name === this.selected ? ">" : " "} ${memberLine(row)}`);
+    body.push(`${row.name === this.selected ? ">" : " "} ${memberLine(row)}`, `  ${modelLine(row)}`);
     if (row.preview && row.status === "running") body.push(`  ${oneLine(row.preview)}`);
     if (row.error) body.push(`  ! ${row.error}`);
    }
@@ -151,9 +149,9 @@ export class TeamDashboard {
  }
 }
 
-const labels: Record<string, string> = { spawn_teammate: "创建成员", send_message: "团队消息", list_agents: "团队状态", team_wait: "等待团队", wait_agent: "等待变化", interrupt_agent: "中断成员", team_results: "读取结果", team_results_ack: "确认结果", team_finalize: "团队收尾", team_report: "成员报告", team_task_create: "创建任务", team_task_list: "任务列表", team_task_get: "读取任务", team_task_update: "更新任务", team_verification_start: "开始验证", team_verification_finish: "记录验证" };
+const labels: Record<string, string> = { list_team_models: "可用模型", spawn_teammate: "创建成员", send_message: "团队消息", list_agents: "团队状态", team_wait: "等待团队", wait_agent: "等待变化", interrupt_agent: "中断成员", team_results: "读取结果", team_results_ack: "确认结果", team_finalize: "团队收尾", team_report: "成员报告", team_task_create: "创建任务", team_task_list: "任务列表", team_task_get: "读取任务", team_task_update: "更新任务", team_verification_start: "开始验证", team_verification_finish: "记录验证" };
 export function toolTitle(name: string, args: Record<string, unknown>) {
- const suffix = [args.target ?? args.name ?? args.subject ?? args.task_id ?? args.condition, args.action].filter(v => typeof v === "string").join(" · ");
+ const suffix = [args.target ?? args.agent_id ?? args.name ?? args.subject ?? args.task_id ?? args.condition, args.action].filter(v => typeof v === "string").join(" · ");
  return `${labels[name] ?? name}${suffix ? " · " + oneLine(suffix) : ""}`;
 }
 export function toolSummary(name: string, value: unknown): string {
@@ -162,10 +160,10 @@ export function toolSummary(name: string, value: unknown): string {
  if (name === "team_finalize") return v.sealed ? "已收尾" : `尚未收尾 · ${(v.blockers ?? []).join(" · ")}`;
  if (name === "team_results") return `${v.results?.length ?? 0} 条结果`;
  if (name === "team_results_ack") return `已确认 ${v.acknowledged?.length ?? 0} 条结果`;
- if (name === "send_message") return v.accepted ? "已接受 · 下一轮投递" : "消息已保存";
- if (name === "interrupt_agent") return v.stopped ? "已停止" : "仍在停止中";
+ if (name === "send_message") return v.accepted || v.sent || v.messageId ? "已接受 · 步骤边界引导" : "消息已保存";
+ if (name === "interrupt_agent") return v.stopped ? "已停止" : "已请求中断";
  if (name === "team_wait" || name === "wait_agent") return `${({ satisfied: "必要成员已结束", timed_out: "等待超时", changed: "状态已变化", cancelled: "已取消", round_closed: "批次已关闭", no_progress: "没有可等待的执行" } as Record<string, string>)[v.reason] ?? v.reason} · ${v.running?.length ?? 0} 项未结束`;
- if (name === "list_agents") return `${v.members?.filter((m: any) => m.name !== "lead").length ?? 0} 个成员 · ${v.unacknowledged_result_ids?.length ?? 0} 待处理`;
+ if (name === "list_agents") return `${v.members?.filter((m: any) => m.name !== "lead").length ?? 0} 个成员`;
  if (name === "team_task_list") return `${Array.isArray(value) ? value.length : 0} 项任务`;
  if (v.id && v.status) return `${v.id} · r${v.revision} · ${v.status}`;
  if (name === "spawn_teammate") return `${v.name ?? "成员"} · ${status[v.status] ?? v.status ?? "已创建"}`;

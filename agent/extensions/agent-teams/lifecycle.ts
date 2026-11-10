@@ -23,11 +23,11 @@ export class Lifecycle {
  constructor(board: Board) { this.board = board; }
  get state() { return this.board.state.coordination!; }
  get current() { return this.state.rounds.at(-1); }
- initialize() {
+ initialize(preservedQueued: string[] = []) {
   this.board.change(s => {
    s.version = 2;
    s.coordination ??= { rounds: [], turns: [], results: [] };
-   for (const turn of ledger(s).turns.filter(unsettled)) {
+   for (const turn of ledger(s).turns.filter(t => unsettled(t) && !(t.status === "queued" && preservedQueued.includes(t.id)))) {
     turn.status = "recovery_required";
     addResult(s, { round_id: turn.round_id, turn_id: turn.id, member: turn.member, kind: "result", outcome: "recovery_required", summary: "Execution stopped before a durable outcome. Inspect the child session before retrying side effects." });
     turn.prompt = "";
