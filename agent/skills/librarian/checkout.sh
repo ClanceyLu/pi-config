@@ -6,7 +6,7 @@ usage() {
 Usage: checkout.sh <repo> [options]
 
 Ensure a cached checkout exists at:
-  ~/.cache/checkouts/<host>/<org>/<repo>
+  ~/workspace/00review/<host>/<org>/<repo>
 
 Examples:
   checkout.sh mitsuhiko/minijinja
@@ -20,7 +20,7 @@ Options:
   --update-interval <secs>    Minimum seconds between updates (default: 300).
 
 Environment:
-  LIBRARIAN_CACHE_ROOT        Override cache root (default: ~/.cache/checkouts)
+  LIBRARIAN_CACHE_ROOT        Override cache root (default: ~/workspace/00review)
   LIBRARIAN_DEFAULT_HOST      Host for owner/repo shorthand (default: github.com)
   LIBRARIAN_UPDATE_INTERVAL   Default update interval in seconds
 EOF
@@ -183,7 +183,7 @@ org="$parsed_org"
 repo="$parsed_repo"
 origin_url="$parsed_origin"
 
-cache_root="${LIBRARIAN_CACHE_ROOT:-$HOME/.cache/checkouts}"
+cache_root="${LIBRARIAN_CACHE_ROOT:-$HOME/workspace/00review}"
 mkdir -p "$cache_root"
 cache_root="$(cd "$cache_root" && pwd -P)"
 checkout_path="$cache_root/$host/$org/$repo"

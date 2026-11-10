@@ -1,13 +1,13 @@
 {
   "$schema": "https://pi.dev/schemas/settings.schema.json",
   "defaultProvider": "openai-codex",
-  "defaultModel": "auto",
   "theme": "light",
   "defaultThinkingLevel": "medium",
   "defaultTools": ["+codemode", "+tool_search"],
   "packages": [
     "npm:@dietrichgebert/ponytail",
-    "npm:pi-compact-tools"
+    "npm:pi-compact-tools",
+    "npm:@juicesharp/rpiv-ask-user-question"
   ],
   "editorPaddingX": 1,
   "hideThinkingBlock": false,

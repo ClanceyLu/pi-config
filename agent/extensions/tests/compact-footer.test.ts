@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { visibleWidth } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import compactFooter, { alignStats, formatModel } from "../compact-footer.ts";
+import "./pi-runtime.mjs";
+const { visibleWidth } = await import("@earendil-works/pi-tui");
+const { default: compactFooter, alignStats, formatModel } = await import("../compact-footer.ts");
 
 const model = (id = "gpt-5.6-sol", api = "openai-responses") => ({ id, api, reasoning: true, provider: "openai-codex", contextWindow: 200000 });
 

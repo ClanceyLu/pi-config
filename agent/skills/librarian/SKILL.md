@@ -1,6 +1,6 @@
 ---
 name: librarian
-description: "Cache and refresh remote git repositories under ~/.cache/checkouts/<host>/<org>/<repo> so future references can reuse a local copy. Use this skill when the user points you to a remote git repository as reference or you encountered a remote git repo through other means."
+description: "Cache and refresh remote git repositories under ~/workspace/00review/<host>/<org>/<repo> so future references can reuse a local copy. Use this skill when the user points you to a remote git repository as reference or you encountered a remote git repo through other means."
 ---
 
 Use this skill when the user points you to a remote git repository (GitHub/GitLab/Bitbucket URLs, `git@...`, or `owner/repo` shorthand).
@@ -14,11 +14,11 @@ The goal is to keep a reusable local checkout that is:
 
 Repositories are stored at:
 
-`~/.cache/checkouts/<host>/<org>/<repo>`
+`~/workspace/00review/<host>/<org>/<repo>`
 
 Example:
 
-`github.com/mitsuhiko/minijinja` → `~/.cache/checkouts/github.com/mitsuhiko/minijinja`
+`github.com/mitsuhiko/minijinja` → `~/workspace/00review/github.com/mitsuhiko/minijinja`
 
 ## Command
 

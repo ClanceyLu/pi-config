@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Container, ScrollView, VStack, TuiAltScreen, TuiMainScreen, visibleWidth, type TUI, type Terminal } from "@earendil-works/pi-tui";
+import type { TUI, Terminal } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import extension, { isReadingHistory, userTextAtViewport } from "../last-user-message.ts";
+import "./pi-runtime.mjs";
+const { Container, ScrollView, VStack, TuiAltScreen, TuiMainScreen, visibleWidth } = await import("@earendil-works/pi-tui");
+const { default: extension, isReadingHistory, userTextAtViewport } = await import("../last-user-message.ts");
 
 // Test the installed Pi components, including their padding and Markdown wrapping.
 const agentDist = new URL("./", import.meta.resolve("@earendil-works/pi-coding-agent"));
